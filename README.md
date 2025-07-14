@@ -1,1 +1,0 @@
-# pipe-vector-extractor
