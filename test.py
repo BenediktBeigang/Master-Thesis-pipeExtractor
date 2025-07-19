@@ -4,7 +4,7 @@ import random
 import laspy
 import pandas as pd
 from pyntcloud import PyntCloud
-from scipy.spatial import cKDTree
+import datetime
 
 # --- Laden der Punktwolke ---
 las = laspy.read("./testPipeCloud.las")  # LAS-Datei laden
@@ -26,7 +26,7 @@ tree = cloud.structures[kdtree_id]
 POP_SIZE = 100
 N_GENERATIONS = 100
 RADIUS = 0.10  # 10 cm
-HEIGHT_W = 0.2
+HEIGHT_W = 1
 SAMPLE_DISTANCE = 0.5  # 5m
 
 ELITE_RATIO = 0.3  # 10% Elite direkt übernehmen
@@ -41,40 +41,12 @@ z_max = np.max(pts[:, 2])
 z_range = z_max - z_min
 
 
-def count_points_sampled_along_segment(p1, p2, radius, sample_distance):
-    """
-    Abtastung entlang des Segments alle sample_distance Meter.
-    An jedem Abtastpunkt werden Nachbarn im Umkreis von radius gezählt.
-    Nutzt KDTree für effiziente Nachbarschaftssuche.
-    """
-    # Richtungsvektor und Länge
-    v = p2 - p1
-    L = np.linalg.norm(v)
-    if L == 0:
-        return 0
-
-    v_norm = v / L
-
-    # Abtastpunkte entlang des Segments berechnen
-    num_samples = int(L / sample_distance) + 1
-
-    # Für jeden Abtastpunkt Nachbarn zählen
-    total_count = 0
-    for i in range(num_samples):
-        t = min(i * sample_distance, L)  # Position entlang des Segments
-        sample_point = p1 + t * v_norm
-
-        # KDTree verwenden für effiziente Nachbarschaftssuche
-        neighbors = tree.query_ball_point(sample_point, r=radius)
-        total_count += len(neighbors)
-
-    return total_count
-
-
 def count_points_sampled_along_segment_bool(p1, p2, radius, sample_distance):
     """
     Abtastung entlang des Segments alle sample_distance Meter.
     An jedem Abtastpunkt werden Nachbarn im Umkreis von radius gezählt.
+    Falls die Anzahl der Nachbarn größer als der halbe Median der Abtastpunkte ist,
+    wird der Zähler inkrementiert, sonst dekrementiert.
     Nutzt KDTree für effiziente Nachbarschaftssuche.
     """
     # Richtungsvektor und Länge
@@ -123,15 +95,15 @@ def create_individual():
 def fitness(ind):
     p1, p2 = pts[ind[0]], pts[ind[1]]
 
-    # count_near = count_points_near_segment(pts, p1, p2, RADIUS)
     count_near = count_points_sampled_along_segment_bool(
         p1, p2, RADIUS, SAMPLE_DISTANCE
     )
 
-    # Durchschnittshöhe normiert auf [0,1] basierend auf min/max des Datensatzes
-    # avg_height = (p1[2] + p2[2]) / 2
-    # height_score = ((avg_height - z_min) / z_range) * HEIGHT_W if z_range > 0 else 0
-    return count_near  # + height_score
+    avg_height = np.mean([p1[2], p2[2]])
+    normalized_height = (
+        ((avg_height - z_min) / z_range) * HEIGHT_W if z_range > 0 else 0
+    )
+    return count_near + normalized_height
 
 
 # --- Mutation ---
@@ -249,11 +221,13 @@ print("Best fitness:", best_fit)
 
 # write history to CSV
 history_df = pd.DataFrame(history)
-history_df.to_csv("evolution_history.csv", index=False)
+# history_df.to_csv("evolution_history.csv", index=False)
 
 # Schreibe ALLE Vektoren der History in die OBJ-Datei
-with open("best_pipe_endpoints.obj", "w") as f:
-    for idx, row in history_df.iterrows():
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+with open(f"./output/{timestamp}_best_pipe_endpoints.obj", "w") as f:
+    top_3_history = history_df.head(3)
+    for idx, row in top_3_history.iterrows():
         f.write(f"v {row['p1_x']} {row['p1_y']} {row['p1_z']}\n")
         f.write(f"v {row['p2_x']} {row['p2_y']} {row['p2_z']}\n")
         f.write("l -1 -2\n")
