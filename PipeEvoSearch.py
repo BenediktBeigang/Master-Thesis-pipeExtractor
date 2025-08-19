@@ -104,7 +104,11 @@ def count_points_sampled_along_segment_bool(p1, p2, radius, sample_distance):
 
 
 # --- Individuen-Definition ---
-def create_individual(pts, found_pipes):
+def create_individual(found_pipes):
+    if pts is None:
+        raise ValueError(
+            "KDTree ist nicht initialisiert. Bitte initialize_globals aufrufen."
+        )
     max_attempts = 100
     for _ in range(max_attempts):
         ind = (random.randrange(len(pts)), random.randrange(len(pts)))
@@ -115,8 +119,8 @@ def create_individual(pts, found_pipes):
 
 
 # --- Fitness-Funktion ---
-def fitness(ind, found_pipes, pts):
-    if z_min is None or z_range is None:
+def fitness(ind, found_pipes):
+    if z_min is None or z_range is None or pts is None:
         raise ValueError(
             "KDTree ist nicht initialisiert. Bitte initialize_globals aufrufen."
         )
@@ -139,8 +143,8 @@ def fitness(ind, found_pipes, pts):
 
 
 # --- Mutation ---
-def mutate(ind, foundPipes, pts):
-    if tree is None:
+def mutate(ind, foundPipes):
+    if tree is None or pts is None:
         raise ValueError(
             "KDTree ist nicht initialisiert. Bitte initialize_globals aufrufen."
         )
@@ -158,7 +162,7 @@ def mutate(ind, foundPipes, pts):
             # Punkt aus Nachbarschaft
             i = random.choice([0, 1])
             idx = ind[i]
-            neigh = tree.query_ball_point(pts[idx], r=NEIGHBORHOOD_RADIUS * 2)
+            neigh = tree.query_ball_point(pts[idx], r=SAMPLE_DISTANCE * 2)
             if len(neigh) > 1:
                 new_idx = random.choice(neigh)
                 new_ind = list(ind)
@@ -174,7 +178,7 @@ def mutate(ind, foundPipes, pts):
 
 
 # --- Rekombination (Crossover) ---
-def crossover(p1, p2, foundPipes, pts):
+def crossover(p1, p2, foundPipes):
     # Tausche zufällig eine Achse
     if random.random() < 0.5:
         child = (p1[0], p2[1])
@@ -202,12 +206,12 @@ def find_one_pipe(
         )
 
     history = []
-    population = [create_individual(pts, foundPipes) for _ in range(populationSize)]
+    population = [create_individual(foundPipes) for _ in range(populationSize)]
 
     for gen in range(generation_count):
         # Fitness berechnen & Selektion
         scored = sorted(
-            ((ind, fitness(ind, foundPipes, pts)) for ind in population),
+            ((ind, fitness(ind, foundPipes)) for ind in population),
             key=lambda x: x[1],
             reverse=True,
         )
@@ -270,16 +274,16 @@ def find_one_pipe(
         for _ in range(crossover_count):
             if len(parent_pool) >= 2:
                 pa, pb = random.sample(parent_pool, 2)
-                child = crossover(pa, pb, foundPipes, pts)
-                child = mutate(child, foundPipes, pts)
+                child = crossover(pa, pb, foundPipes)
+                child = mutate(child, foundPipes)
                 next_gen.append(child)
             else:
-                next_gen.append(create_individual(pts, foundPipes))
+                next_gen.append(create_individual(foundPipes))
 
         # 3. Komplett neue Individuen
         random_count = populationSize - len(next_gen)
         for _ in range(random_count):
-            next_gen.append(create_individual(pts, foundPipes))
+            next_gen.append(create_individual(foundPipes))
 
         population = next_gen
 
