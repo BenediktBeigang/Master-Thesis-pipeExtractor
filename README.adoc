@@ -1,5 +1,22 @@
 = pipe-vector-extractor
 
-== packages
+.pipeExtraction.py
+Trys to find vectors based on two points of the segemented pointcloud, that have a lot of points in between. 
+Creates a `xxx_all_pipes.json` file with the vectors and a `xxx_all_pipes.obj` file with the 3D representation of the pipes.
+The `.obj` can be used in CloudCompare to visualize the pipes.
 
-* `PyntCloud`
+.armatureExtraction.py:
+Tries to find clusters of points in the segemented pointcloud, based on their distance to each other.
+If activated it also can take into account the distance to the found pipes (pipeExtraction).
+Creates a `xxx_cluster.json` file with the clusters and a `xxx_cluster_boxes.obj` file with bounding boxes for visualization in CloudCompare.
+
+== Installation via Conda
+
+Use conda to create a new environment with all required packages.
+
+[source, bash]
+----
+conda create -n poiExtraction-env -c conda-forge -y python=3.12 scikit-learn numpy pandas laspy pyntcloud
+conda activate poiExtraction-env
+----
+

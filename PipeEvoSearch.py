@@ -295,6 +295,14 @@ def find_one_pipe(
 
     best_ind, best_fit = valid_scored[0]
     p1, p2 = pts[best_ind[0]], pts[best_ind[1]]
+    pipe_length = np.linalg.norm(p2 - p1)
+
+    pipeCoverage = (best_fit * SAMPLE_DISTANCE) / pipe_length
+    if pipeCoverage < 0.6:
+        print(
+            f"Rohr {pipeIndex + 1} hat eine zu geringe Abdeckung ({pipeCoverage:.2f})."
+        )
+        return None
 
     # Bestes Ergebnis zu gefundenen Rohren hinzufügen
     best_pipe = {

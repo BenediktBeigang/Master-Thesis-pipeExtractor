@@ -1,6 +1,7 @@
 *.las
 *.obj
 *.csv
+*.json
 
 .sklearn-env
 
