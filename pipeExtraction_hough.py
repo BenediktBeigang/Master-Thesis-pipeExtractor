@@ -24,33 +24,18 @@ Beispiel:
 """
 
 import argparse
+import datetime
+import time
 import math
 import sys
 from typing import Tuple, List
 from PipeCluster import clean_pipes
-
+from skimage.feature import canny
+from skimage.filters import gaussian
+from skimage.transform import probabilistic_hough_line
 import numpy as np
 
-
-# --- Robustes LAS-Laden (laspy v2 bevorzugt, Fallback auf v1.7 API) ---
-def load_las_xyz(path: str) -> np.ndarray:
-    try:
-        import laspy  # v2+
-
-        try:
-            las = laspy.read(path)  # v2+
-            xyz = np.vstack((las.x, las.y, las.z)).T.astype(np.float64)
-            return xyz
-        except AttributeError:
-            # Fallback auf v1.7 API
-            from laspy import file as lasfile
-
-            las = lasfile.File(path, mode="r")
-            xyz = np.vstack((las.x, las.y, las.z)).T.astype(np.float64)
-            las.close()
-            return xyz
-    except Exception as e:
-        raise RuntimeError(f"Konnte LAS nicht laden: {e}")
+from lasUtil import load_las_xyz
 
 
 def get_z_slices(xyz: np.ndarray, thickness: float) -> List[Tuple[float, float, float]]:
@@ -137,9 +122,6 @@ def make_binary_from_counts(
     - oder Canny auf normalisierten Counts (robuster bei ungleichmäßiger Dichte).
     """
     if use_canny:
-        from skimage.feature import canny
-        from skimage.filters import gaussian
-
         # leichte Glättung + Normalisierung
         if H.max() > 0:
             Hs = gaussian(H / (H.max() + 1e-9), sigma=1.0, preserve_range=True)
@@ -161,8 +143,6 @@ def hough_segments(
     Probabilistic Hough auf Binärbild.
     Rückgabe: Liste von Segmenten in Pixelkoordinaten [( (x0,y0), (x1,y1) ), ...]
     """
-    from skimage.transform import probabilistic_hough_line
-
     min_len_px = max(1, int(round(min_line_length_m / cell_size)))
     max_gap_px = max(0, int(round(max_line_gap_m / cell_size)))
 
@@ -320,6 +300,8 @@ def pipes_format_to_segments(
 
 
 def main():
+    startTime = time.time()
+
     ap = argparse.ArgumentParser(
         description="Z-Slice Hough-Liniendetektion aus LAS → OBJ (CloudCompare)"
     )
@@ -333,8 +315,8 @@ def main():
     ap.add_argument(
         "--cell-size",
         type=float,
-        default=0.05,
-        help="Raster-Zellgröße in m (Default: 0.05)",
+        default=0.02,
+        help="Raster-Zellgröße in m (Default: 0.02)",
     )
     ap.add_argument(
         "--min-count",
@@ -345,13 +327,13 @@ def main():
     ap.add_argument(
         "--use-canny",
         action="store_true",
-        default=False,
+        default=True,
         help="Kanten via Canny (empfohlen)",
     )
     ap.add_argument(
         "--canny-sigma",
         type=float,
-        default=1.2,
+        default=1.6,
         help="Canny Sigma (bei --use-canny)",
     )
     ap.add_argument(
@@ -377,6 +359,12 @@ def main():
         type=int,
         default=0,
         help="Nur die längsten K Segmente insgesamt behalten (0 = alle)",
+    )
+    ap.add_argument(
+        "--clustering",
+        action="store_true",
+        default=False,
+        help="Clustering via PipeCluster",
     )
     ap.add_argument(
         "--output",
@@ -414,24 +402,25 @@ def main():
         open(args.output, "w").write("# Empty OBJ (no lines detected)\n")
         sys.exit(0)
 
-    print(f"Vor Clustering: {len(all_segments)} Segmente")
+    if args.clustering:
+        print(f"Vor Clustering: {len(all_segments)} Segmente")
 
-    # --- Clustering der Segmente ---
-    # Konvertiere Segmente ins Pipes-Format
-    pipes_format = segments_to_pipes_format(all_segments)
+        # --- Clustering der Segmente ---
+        # Konvertiere Segmente ins Pipes-Format
+        pipes_format = segments_to_pipes_format(all_segments)
 
-    # Importiere und verwende das Clustering
-    try:
-        clustered_pipes = clean_pipes(pipes_format)
-        print(f"Nach Clustering: {len(clustered_pipes)} optimierte Segmente")
+        # Importiere und verwende das Clustering
+        try:
+            clustered_pipes = clean_pipes(pipes_format)
+            print(f"Nach Clustering: {len(clustered_pipes)} optimierte Segmente")
 
-        # Konvertiere zurück zu Segmenten
-        all_segments = pipes_format_to_segments(clustered_pipes)
+            # Konvertiere zurück zu Segmenten
+            all_segments = pipes_format_to_segments(clustered_pipes)
 
-    except ImportError:
-        print("PipeCluster nicht verfügbar, überspringe Clustering")
-    except Exception as e:
-        print(f"Clustering fehlgeschlagen: {e}, verwende ursprüngliche Segmente")
+        except ImportError:
+            print("PipeCluster nicht verfügbar, überspringe Clustering")
+        except Exception as e:
+            print(f"Clustering fehlgeschlagen: {e}, verwende ursprüngliche Segmente")
 
     # Optional: nur Top-K längste Segmente insgesamt (nach Clustering)
     if args.top_k_total and args.top_k_total > 0:
@@ -448,12 +437,17 @@ def main():
         order = np.argsort(lens)[::-1][: args.top_k_total]
         all_segments = [all_segments[i] for i in order]
 
-    write_obj_lines(all_segments, args.output)
+    write_obj_lines(
+        all_segments,
+        f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.output}",
+    )
 
     print(f"\nFertig!")
     print(f"Verarbeitete Slices: {len(slices)}")
     print(f"Gefundene Linien gesamt: {len(all_segments)}")
     print(f"Ausgabedatei: {args.output}")
+    endTime = time.time()
+    print(f"Benötigte Zeit: {endTime - startTime:.2f} Sekunden")
 
 
 if __name__ == "__main__":

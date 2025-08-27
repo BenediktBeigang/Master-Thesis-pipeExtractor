@@ -6,12 +6,7 @@ import os
 import json
 import time
 
-
-def load_las_points(filepath, ignore_z=False):
-    las = laspy.read(filepath)
-    if ignore_z:
-        return np.vstack((las.x, las.y)).T
-    return np.vstack((las.x, las.y, las.z)).T
+from lasUtil import load_las_xyz
 
 
 def load_pipes(filepath):
@@ -214,8 +209,8 @@ def main(
 ):
     print(f"Loading LAS file: {las_path}")
     os.makedirs(output_folder, exist_ok=True)
-    X_clustering = load_las_points(las_path, ignore_z=ignore_z)
-    X_original = load_las_points(las_path, ignore_z=False)  # Für Bounding Boxes
+    X_clustering = load_las_xyz(las_path, ignoreZ=ignore_z)
+    X_original = load_las_xyz(las_path, ignoreZ=False)  # Für Bounding Boxes
     print(f"Loaded {len(X_clustering)} points from {las_path}")
 
     if near_pipe_filter:

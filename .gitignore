@@ -2,6 +2,7 @@
 *.obj
 *.csv
 *.json
+*.png
 
 .sklearn-env
 
