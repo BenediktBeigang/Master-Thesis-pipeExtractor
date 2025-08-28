@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from typing import List, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,39 +10,25 @@ import laspy
 def save_slice_las(
     sliced_xyz: np.ndarray,
     slice_idx: int,
-    z_center: float,
     output_dir: str,
 ) -> None:
     """
     Speichert die Punkte eines Slices als separate LAS-Datei.
     """
-    os.makedirs(os.path.join(output_dir, "las"), exist_ok=True)
-
-    las_path = os.path.join(output_dir, f"las/slice_{slice_idx:03d}_points.las")
+    os.makedirs(output_dir, exist_ok=True)
+    las_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_points.las")
 
     try:
-        # Erstelle ein neues LAS-File
+        # Einfachste Lösung: Verwende die gleichen Header-Einstellungen wie bei großen LAS-Dateien
         header = laspy.LasHeader(point_format=0, version="1.2")
-        header.x_scale = 0.001
-        header.y_scale = 0.001
-        header.z_scale = 0.001
 
-        # Setze Offset basierend auf den Punktdaten
-        header.x_offset = np.floor(sliced_xyz[:, 0].min())
-        header.y_offset = np.floor(sliced_xyz[:, 1].min())
-        header.z_offset = np.floor(sliced_xyz[:, 2].min())
-
-        # Erstelle LAS-File
+        # Keine Transformation - nur direkte Übernahme
         las = laspy.LasData(header)
-
-        # Setze Koordinaten
         las.x = sliced_xyz[:, 0]
         las.y = sliced_xyz[:, 1]
         las.z = sliced_xyz[:, 2]
 
-        # Speichere die Datei
         las.write(las_path)
-
         print(f"  → Slice LAS gespeichert: {las_path} ({len(sliced_xyz)} Punkte)")
 
     except Exception as e:
@@ -57,9 +44,8 @@ def save_slice_obj(
     """
     Speichert die Linien eines Slices als separate OBJ-Datei.
     """
-    os.makedirs(os.path.join(output_dir, "obj"), exist_ok=True)
-
-    obj_path = os.path.join(output_dir, f"obj/slice_{slice_idx:03d}_lines.obj")
+    os.makedirs(output_dir, exist_ok=True)
+    obj_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_lines.obj")
 
     with open(obj_path, "w", encoding="utf-8") as f:
         f.write(f"# OBJ generated for slice {slice_idx}\n")
@@ -74,6 +60,63 @@ def save_slice_obj(
             vert_idx += 2
 
     print(f"  → Slice OBJ gespeichert: {obj_path}")
+
+
+def write_clusters_as_obj(
+    slice_idx,
+    segments,
+    clusters,
+    output_dir,
+    z_value=0.0,
+):
+    """
+    id : int                             # Slice-ID
+    segments : list[ ((x1,y1),(x2,y2)), ... ] oder list[ ((x1,y1,z1),(x2,y2,z2)), ... ]
+    clusters : dict[int, np.ndarray]  # {cluster_id: indices in segments}
+    output_dir : str                   # Ausgabeverzeichnis
+    z_value  : float                  # Z-Koordinate (2D -> setze 0.0)
+    """
+    segments = np.asarray(segments, dtype=float)  # (N, 2, 2) oder (N, 2, 3)
+    os.makedirs(output_dir, exist_ok=True)
+    obj_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_cluster.obj")
+
+    # Eine einzige OBJ-Datei für alle Cluster
+    with open(obj_path, "w", encoding="utf-8") as f:
+        f.write("# Wavefront OBJ (Polylines)\n")
+        f.write(f"# Alle Cluster, {len(clusters)} Cluster insgesamt\n")
+
+        v_counter = 0
+
+        for cid, idx in clusters.items():
+            idx = np.asarray(idx, dtype=int)
+            if idx.size == 0:
+                continue
+
+            # Erstelle separates Objekt für jeden Cluster
+            f.write(f"\n# Cluster {cid}, {len(idx)} Segmente\n")
+            f.write(f"o cluster_{int(cid):03d}\n")
+            f.write(f"g cluster_{int(cid):03d}_lines\n")
+
+            # Schreibe jedes Segment als separate Linie
+            for si in idx:
+                segment = segments[si]
+
+                # Prüfe ob 2D oder 3D Segmente
+                if segment.shape[1] == 2:  # 2D: ((x1,y1),(x2,y2))
+                    (x1, y1), (x2, y2) = segment
+                    z1 = z2 = z_value
+                elif segment.shape[1] == 3:  # 3D: ((x1,y1,z1),(x2,y2,z2))
+                    (x1, y1, z1), (x2, y2, z2) = segment
+                else:
+                    raise ValueError(f"Unerwartetes Segment-Format: {segment.shape}")
+
+                # Schreibe die beiden Vertices für dieses Segment
+                f.write(f"v {x1:.9f} {y1:.9f} {z1:.9f}\n")
+                f.write(f"v {x2:.9f} {y2:.9f} {z2:.9f}\n")
+
+                # Erstelle eine Linie zwischen den beiden Vertices
+                f.write(f"l {v_counter + 1} {v_counter + 2}\n")
+                v_counter += 2
 
 
 def save_slice_images(
@@ -187,3 +230,26 @@ def save_slice_images(
     plt.close()
 
     print(f"  → Bilder gespeichert: {img1_path} und {img2_path}")
+
+
+def write_obj_lines(
+    segments_world: List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
+    out_path: str,
+) -> None:
+    """
+    Schreibt Polylinien als OBJ:
+        v x y z
+        v x y z
+        l i j
+    CloudCompare kann diese Linien laden.
+    """
+    print("Schreibe finale segmente in obj", out_path)
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write("# OBJ generated by slice_hough_obj.py\n")
+        f.write(f"# Total lines: {len(segments_world)}\n")
+        vert_idx = 1
+        for p0, p1 in segments_world:
+            f.write(f"v {p0[0]:.6f} {p0[1]:.6f} {p0[2]:.6f}\n")
+            f.write(f"v {p1[0]:.6f} {p1[1]:.6f} {p1[2]:.6f}\n")
+            f.write(f"l {vert_idx} {vert_idx+1}\n")
+            vert_idx += 2
