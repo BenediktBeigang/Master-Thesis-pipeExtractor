@@ -33,8 +33,10 @@ import sys
 
 from calcSlice import get_z_slices, process_single_slice
 from clustering_hough import (
-    features_and_clusters,
-    merge_clusters_to_segments,
+    cluster_segments,
+    merge_segments_in_slice,
+    merge_segments_global,
+    subcluster_with_segement_z,
 )
 from export import write_obj_lines, write_clusters_as_obj
 from util import load_las_xyz, prepare_output_directory
@@ -145,11 +147,12 @@ def main():
             )
 
             # Cluster and save debug obj
-            result = features_and_clusters(
+            result = cluster_segments(
                 segments,
                 eps_euclid=0.35,
                 min_samples=3,
                 rho_scale=1.0,
+                preserve_noise=False,
             )
             # write_clusters_as_obj(
             #     slice_idx=i,
@@ -163,7 +166,7 @@ def main():
             if "clusters" not in result or not result["clusters"]:
                 continue
 
-            concatenated_segments = merge_clusters_to_segments(
+            concatenated_segments = merge_segments_in_slice(
                 segments,
                 result["clusters"],
                 gap_threshold=2.0,
@@ -186,12 +189,13 @@ def main():
         print("Keine Linien in keinem einzigen Slice gefunden.", file=sys.stderr)
         sys.exit(0)
 
-    # result_phase2_clustering = features_and_clusters(
-    #     all_segments,
-    #     eps_euclid=0.35,
-    #     min_samples=3,
-    #     rho_scale=1.0,
-    # )
+    result_phase2_clustering = cluster_segments(
+        all_segments,
+        eps_euclid=0.5,
+        min_samples=1,
+        rho_scale=1.3,
+        preserve_noise=True,
+    )
 
     # write_clusters_as_obj(
     #     slice_idx=-1,
@@ -200,13 +204,23 @@ def main():
     #     output_dir="./output/obj",
     # )
 
-    # all_segments = merge_clusters_to_segments(
-    #     all_segments,
-    #     result_phase2_clustering["clusters"],
-    #     gap_threshold=2.0,
-    #     min_length=1.0,
-    #     useMaxZ=True,
-    # )
+    result_phase3_clustering = subcluster_with_segement_z(
+        segments=all_segments,
+        clusters=result_phase2_clustering["clusters"],
+        gap=0.3,
+    )
+
+    write_clusters_as_obj(
+        slice_idx=-1,
+        segments=all_segments,
+        clusters=result_phase3_clustering,
+        output_dir="./output/obj",
+    )
+
+    all_segments = merge_segments_global(
+        all_segments,
+        result_phase3_clustering,
+    )
 
     write_obj_lines(
         all_segments,
