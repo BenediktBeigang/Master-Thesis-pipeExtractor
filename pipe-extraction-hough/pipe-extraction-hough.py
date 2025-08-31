@@ -35,10 +35,10 @@ from calcSlice import get_z_slices, process_single_slice
 from clustering_hough import (
     cluster_segments,
     merge_segments_in_slice,
-    merge_segments_global,
     subcluster_with_segement_z,
 )
 from export import write_obj_lines, write_clusters_as_obj
+from merge_segments import merge_segments_in_clusters
 from util import load_las_xyz, prepare_output_directory
 
 
@@ -166,11 +166,12 @@ def main():
             if "clusters" not in result or not result["clusters"]:
                 continue
 
-            concatenated_segments = merge_segments_in_slice(
+            concatenated_segments = merge_segments_in_clusters(
                 segments,
                 result["clusters"],
                 gap_threshold=2.0,
                 min_length=1.0,
+                z_max=False,
             )
             write_obj_lines(
                 concatenated_segments, f"./output/obj/slice_{i:03d}_concat.obj"
@@ -207,7 +208,7 @@ def main():
     result_phase3_clustering = subcluster_with_segement_z(
         segments=all_segments,
         clusters=result_phase2_clustering["clusters"],
-        gap=0.3,
+        gap=0.2,
     )
 
     write_clusters_as_obj(
@@ -217,9 +218,12 @@ def main():
         output_dir="./output/obj",
     )
 
-    all_segments = merge_segments_global(
+    all_segments = merge_segments_in_clusters(
         all_segments,
         result_phase3_clustering,
+        gap_threshold=2.0,
+        min_length=1.0,
+        z_max=True,
     )
 
     write_obj_lines(
