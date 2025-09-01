@@ -34,7 +34,6 @@ import sys
 from calcSlice import get_z_slices, process_single_slice
 from clustering_hough import (
     cluster_segments,
-    merge_segments_in_slice,
     subcluster_with_segement_z,
 )
 from export import write_obj_lines, write_clusters_as_obj

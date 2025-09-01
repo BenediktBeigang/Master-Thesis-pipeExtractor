@@ -1,7 +1,5 @@
-import os
 import numpy as np
 from sklearn.cluster import DBSCAN
-from pathlib import Path
 import numpy as np
 
 
