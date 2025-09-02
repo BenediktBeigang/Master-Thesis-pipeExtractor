@@ -4,7 +4,7 @@ import numpy as np
 import laspy
 
 
-def load_las_xyz(path: str, ignoreZ: bool = False) -> np.ndarray:
+def load_las(path: str, ignoreZ: bool = False) -> np.ndarray:
     """
     Lädt die XYZ-Koordinaten aus einer LAS-Datei.
     Wenn ignoreZ gesetzt ist, werden nur X und Y geladen (2D).

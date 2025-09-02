@@ -38,7 +38,7 @@ from clustering_hough import (
 )
 from export import write_obj_lines, write_clusters_as_obj
 from merge_segments import merge_segments_in_clusters
-from util import load_las_xyz, prepare_output_directory
+from util import load_las, prepare_output_directory
 
 
 def main():
@@ -51,7 +51,7 @@ def main():
     ap.add_argument(
         "--thickness",
         type=float,
-        default=0.1,
+        default=0.05,
         help="Dicke der Z-Slices (Meter)",
     )
     ap.add_argument(
@@ -110,7 +110,7 @@ def main():
     args = ap.parse_args()
 
     print(f"Lade Punktwolke: {args.input}")
-    xyz = load_las_xyz(args.input)
+    xyz = load_las(args.input)
     if xyz.size == 0:
         print("Leere Punktwolke.", file=sys.stderr)
         sys.exit(1)
@@ -172,9 +172,9 @@ def main():
                 min_length=1.0,
                 z_max=False,
             )
-            write_obj_lines(
-                concatenated_segments, f"./output/obj/slice_{i:03d}_concat.obj"
-            )
+            # write_obj_lines(
+            #     concatenated_segments, f"./output/obj/slice_{i:03d}_concat.obj"
+            # )
             print(f"  → Zusammengeführt Segemente: {len(concatenated_segments)}")
             all_segments.extend(concatenated_segments)
 
