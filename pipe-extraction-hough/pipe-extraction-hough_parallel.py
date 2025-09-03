@@ -26,8 +26,12 @@ Beispiel:
         --image-output-dir slice_images
 """
 
+from itertools import repeat
 import argparse
+from concurrent.futures import ProcessPoolExecutor
 import datetime
+from multiprocessing import get_context
+import os
 import time
 import sys
 
@@ -38,6 +42,7 @@ from clustering_hough import (
 )
 from export import write_obj_lines, write_clusters_as_obj
 from merge_segments import merge_segments_in_clusters
+from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
 from util import load_las, prepare_output_directory
 
 
@@ -96,44 +101,56 @@ def main():
     # Berechne alle Z-Slices
     slices = get_z_slices(xyz, args.thickness)
 
+    # Shared Memory vorbereiten
+    shm, shape, dtype_str = share_xyz_array(xyz)
+
+    # Klein gehaltene, picklbare Argumente für den Worker
+    args_dict = dict(
+        cell_size=args.cell_size,
+        canny_sigma=args.canny_sigma,
+        min_line_length_m=args.min_line_length_m,
+        max_line_gap_m=args.max_line_gap_m,
+    )
+
+    # Tasks in der Reihenfolge der Slices bauen (bewahrt Sortierung)
+    tasks = [(i, zc, zmin, zmax) for i, (zc, zmin, zmax) in enumerate(slices)]
+
     # Verarbeite alle Slices
     all_segments = []
     total_processed = 0
 
     prepare_output_directory("./output/")
 
-    for i, (z_center, zmin, zmax) in enumerate(slices):
-        try:
-            # Calc Segements with Hough
-            segments = process_single_slice(xyz, z_center, zmin, zmax, args, i)
+    # robustes Startverfahren wählen:
+    # - Linux: 'fork' nutzt COW, spart anfänglich RAM, ist ok wenn du SharedMemory sowieso nutzt
+    # - Windows/macOS: 'spawn' ist Standard, SHM funktioniert dort genau für diesen Use-Case
+    ctx = get_context()  # Standard-Startmethode des OS
+    max_workers = os.cpu_count() or 4
+    chunksize = 8  # feinabstimmen bei vielen Slices
 
-            # Cluster and save debug obj
-            result = cluster_segments(
-                segments,
-                eps_euclid=0.35,
-                min_samples=3,
-                rho_scale=1.0,
-                preserve_noise=False,
-            )
-
-            if "clusters" not in result or not result["clusters"]:
-                continue
-
-            concatenated_segments = merge_segments_in_clusters(
-                segments,
-                result["clusters"],
-                gap_threshold=2.0,
-                min_length=1.0,
-                z_max=False,
-            )
-            all_segments.extend(concatenated_segments)
-
-        except Exception as e:
-            print(f"Fehler bei Slice {i}: {e}", file=sys.stderr)
-        finally:
-            total_processed += 1
-            if total_processed % 10 == 0:
-                print(f"Verarbeitet: {total_processed}/{len(slices)} Slices")
+    try:
+        with ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=ctx,
+            initializer=_init_shm,
+            initargs=(shm.name, shape, dtype_str),
+        ) as ex:
+            # worker_process_slice ist TOP-LEVEL und nimmt (task, args_dict) an
+            for slice_idx, segments in ex.map(
+                worker_process_slice,
+                tasks,  # iterable 1: task tuples
+                repeat(args_dict),  # iterable 2: args_dict für jeden Task
+                chunksize=chunksize,
+            ):
+                if segments:
+                    all_segments.extend(segments)
+                total_processed += 1
+                if total_processed % 10 == 0:
+                    print(f"Verarbeitet: {total_processed}/{len(slices)} Slices")
+    finally:
+        # SHM nur im Hauptprozess schließen/unlinken
+        shm.close()
+        shm.unlink()
 
     if len(all_segments) == 0:
         print("Keine Linien in keinem einzigen Slice gefunden.", file=sys.stderr)

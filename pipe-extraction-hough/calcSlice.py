@@ -84,24 +84,18 @@ def rasterize_xy(
     return H.astype(np.float64), (y_edges, x_edges)
 
 
-def make_binary_from_counts(
-    H: np.ndarray, min_count: int = 3, use_canny: bool = True, canny_sigma: float = 1.2
-) -> np.ndarray:
+def make_binary_from_counts(H: np.ndarray, canny_sigma: float = 1.2) -> np.ndarray:
     """
     Erzeugt ein Binärbild für Hough.
     - Entweder simple Count-Schwelle (H >= min_count),
     - oder Canny auf normalisierten Counts (robuster bei ungleichmäßiger Dichte).
     """
-    if use_canny:
-        # leichte Glättung + Normalisierung
-        if H.max() > 0:
-            Hs = gaussian(H / (H.max() + 1e-9), sigma=1.0, preserve_range=True)
-        else:
-            Hs = H
-        edges = canny(Hs, sigma=canny_sigma)
-        return edges.astype(bool)
+    if H.max() > 0:
+        Hs = gaussian(H / (H.max() + 1e-9), sigma=1.0, preserve_range=True)
     else:
-        return (H >= max(1, int(min_count))).astype(bool)
+        Hs = H
+    edges = canny(Hs, sigma=canny_sigma)
+    return edges.astype(bool)
 
 
 def hough_segments(
@@ -148,7 +142,6 @@ def process_single_slice(
     zmax: float,
     args,
     slice_idx: int,
-    slice_in_range: bool,
 ) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
     """
     Verarbeitet einen einzelnen Z-Slice und gibt die gefundenen Liniensegmente zurück.
@@ -156,18 +149,13 @@ def process_single_slice(
     sliced = slice_by_z(xyz, zmin, zmax)
 
     if sliced.shape[0] == 0:
-        print(f"Slice {slice_idx}: Keine Punkte im Z-Bereich {zmin:.3f} .. {zmax:.3f}")
         return []
-
-    print(f"Slice {slice_idx}: {sliced.shape[0]} Punkte bei Z={z_center:.3f}")
 
     xy = sliced[:, :2]
     H, (y_edges, x_edges) = rasterize_xy(xy, cell_size=args.cell_size)
 
     binary = make_binary_from_counts(
         H,
-        min_count=args.min_count,
-        use_canny=args.use_canny,
         canny_sigma=args.canny_sigma,
     )
 
@@ -179,11 +167,9 @@ def process_single_slice(
     )
 
     if len(seg_px) == 0:
-        print(f"  → Keine Linien gefunden")
         return []
 
     segments_world = [pixel_to_world(seg, y_edges, x_edges, z_center) for seg in seg_px]
-    print(f"  → {len(segments_world)} Linien gefunden")
 
     # Speichere Bilder und OBJ für diesen Slice wenn gewünscht
     # if slice_in_range and len(segments_world) > 0:
