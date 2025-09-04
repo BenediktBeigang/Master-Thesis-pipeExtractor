@@ -56,13 +56,13 @@ def main():
     ap.add_argument(
         "--thickness",
         type=float,
-        default=0.1,
+        default=0.05,
         help="Dicke der Z-Slices (Meter)",
     )
     ap.add_argument(
         "--cell-size",
         type=float,
-        default=0.02,
+        default=0.05,
         help="Raster-Zellgröße in m (Default: 0.05)",
     )
     ap.add_argument(
@@ -110,6 +110,13 @@ def main():
         canny_sigma=args.canny_sigma,
         min_line_length_m=args.min_line_length_m,
         max_line_gap_m=args.max_line_gap_m,
+        local_eps_euclid=0.35,
+        local_min_samples=3,
+        local_rho_scale=1.0,
+        local_preserve_noise=False,
+        local_gap_threshold=2.0,
+        local_min_length=1.0,
+        local_z_max=False,
     )
 
     # Tasks in der Reihenfolge der Slices bauen (bewahrt Sortierung)
@@ -151,11 +158,14 @@ def main():
         # SHM nur im Hauptprozess schließen/unlinken
         shm.close()
         shm.unlink()
+        print()
 
     if len(all_segments) == 0:
         print("Keine Linien in keinem einzigen Slice gefunden.", file=sys.stderr)
         sys.exit(0)
 
+    # Phase 2: Cluster über alle Slices
+    print("Phase 2: Clustering über alle Segmente...")
     result_phase2_clustering = cluster_segments(
         all_segments,
         eps_euclid=0.5,
@@ -171,11 +181,17 @@ def main():
     #     output_dir="./output/obj",
     # )
 
-    result_phase3_clustering = subcluster_with_segement_z(
-        segments=all_segments,
-        clusters=result_phase2_clustering["clusters"],
-        gap=0.2,
-    )
+    # Phase 3: Cluster weiter unterteilen mit Z-Segmentierung
+    phase_3_enabled = True
+    if phase_3_enabled:
+        print("Phase 3: Subclustering mit Z-Segmentierung...")
+        result_phase3_clustering = subcluster_with_segement_z(
+            segments=all_segments,
+            clusters=result_phase2_clustering["clusters"],
+            gap=0.2,
+        )
+    else:
+        result_phase3_clustering = result_phase2_clustering["clusters"]
 
     write_clusters_as_obj(
         slice_idx=-1,

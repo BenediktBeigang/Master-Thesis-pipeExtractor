@@ -106,5 +106,10 @@ def merge_segments_in_clusters(
             p2_3d = np.array([p2_world[0], p2_world[1], seg[2]])
 
             result_segments.append([p1_3d, p2_3d])
+            # if z_max:
+            #     seg_idx = len(result_segments) - 1
+            #     print(
+            #         f"[merge_segments] Cluster {cid} -> finales Segment #{seg_idx}: {p1_3d} -> {p2_3d}"
+            #     )
 
     return result_segments

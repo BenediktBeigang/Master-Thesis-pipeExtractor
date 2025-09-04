@@ -130,6 +130,7 @@ def hough_segments(
         threshold=10,  # Abstimmbar; höher = weniger Kandidaten
         line_length=min_len_px,  # Mindestlänge in Pixeln
         line_gap=max_gap_px,  # maximaler Spalt in Pixeln
+        rng=42,  # Reproduzierbarkeit
     )
 
     return lines, h, theta, d

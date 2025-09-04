@@ -26,6 +26,8 @@ def worker_process_slice(task, args_dict):
     args_dict: nur primitive Werte (float/bool/int), damit Pickling klein bleibt
     """
     from calcSlice import process_single_slice  # Import im Worker (sauber bei spawn)
+    from clustering_hough import cluster_segments
+    from merge_segments import merge_segments_in_clusters
 
     slice_idx, z_center, zmin, zmax = task
 
@@ -38,8 +40,40 @@ def worker_process_slice(task, args_dict):
     a.min_line_length_m = args_dict["min_line_length_m"]
     a.max_line_gap_m = args_dict["max_line_gap_m"]
 
+    # Lokale Cluster-/Merge-Parameter (wie synchron)
+    a.local_eps_euclid = args_dict["local_eps_euclid"]
+    a.local_min_samples = args_dict["local_min_samples"]
+    a.local_rho_scale = args_dict["local_rho_scale"]
+    a.local_preserve_noise = args_dict["local_preserve_noise"]
+    a.local_gap_threshold = args_dict["local_gap_threshold"]
+    a.local_min_length = args_dict["local_min_length"]
+    a.local_z_max = args_dict["local_z_max"]
+
+    # Hough-Detektion im Slice
     segments_world = process_single_slice(_XYZ, z_center, zmin, zmax, a, slice_idx)
-    return (slice_idx, segments_world)
+    if not segments_world:
+        return (slice_idx, [])
+
+    # Lokales Clustering (streng) wie im synchronen Code
+    result = cluster_segments(
+        segments_world,
+        eps_euclid=a.local_eps_euclid,
+        min_samples=a.local_min_samples,
+        rho_scale=a.local_rho_scale,
+        preserve_noise=a.local_preserve_noise,
+    )
+    if "clusters" not in result or not result["clusters"]:
+        return (slice_idx, [])
+
+    # Merge innerhalb des Slices (kurze Fragmente raus, Segmente verschmelzen)
+    merged = merge_segments_in_clusters(
+        segments_world,
+        result["clusters"],
+        gap_threshold=a.local_gap_threshold,
+        min_length=a.local_min_length,
+        z_max=a.local_z_max,
+    )
+    return (slice_idx, merged)
 
 
 def share_xyz_array(xyz: np.ndarray):
