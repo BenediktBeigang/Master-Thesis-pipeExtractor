@@ -48,31 +48,35 @@ def worker_process_slice(task, args_dict):
     a.local_gap_threshold = args_dict["local_gap_threshold"]
     a.local_min_length = args_dict["local_min_length"]
     a.local_z_max = args_dict["local_z_max"]
+    merge_segments = args_dict["merge_segments"]
 
     # Hough-Detektion im Slice
     segments_world = process_single_slice(_XYZ, z_center, zmin, zmax, a, slice_idx)
     if not segments_world:
         return (slice_idx, [])
 
-    # Lokales Clustering (streng) wie im synchronen Code
-    result = cluster_segments(
-        segments_world,
-        eps_euclid=a.local_eps_euclid,
-        min_samples=a.local_min_samples,
-        rho_scale=a.local_rho_scale,
-        preserve_noise=a.local_preserve_noise,
-    )
-    if "clusters" not in result or not result["clusters"]:
-        return (slice_idx, [])
+    if merge_segments:
+        # Lokales Clustering (streng) wie im synchronen Code
+        result = cluster_segments(
+            segments_world,
+            eps_euclid=a.local_eps_euclid,
+            min_samples=a.local_min_samples,
+            rho_scale=a.local_rho_scale,
+            preserve_noise=a.local_preserve_noise,
+        )
+        if "clusters" not in result or not result["clusters"]:
+            return (slice_idx, [])
 
-    # Merge innerhalb des Slices (kurze Fragmente raus, Segmente verschmelzen)
-    merged = merge_segments_in_clusters(
-        segments_world,
-        result["clusters"],
-        gap_threshold=a.local_gap_threshold,
-        min_length=a.local_min_length,
-        z_max=a.local_z_max,
-    )
+        # Merge innerhalb des Slices (kurze Fragmente raus, Segmente verschmelzen)
+        merged = merge_segments_in_clusters(
+            segments_world,
+            result["clusters"],
+            gap_threshold=a.local_gap_threshold,
+            min_length=a.local_min_length,
+            z_max=a.local_z_max,
+        )
+    else:
+        merged = segments_world  # ohne Merge, nur Clustering
     return (slice_idx, merged)
 
 

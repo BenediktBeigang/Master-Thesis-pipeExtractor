@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import hough_line_peaks
 import laspy
-
+import json
 
 def save_slice_las(
     sliced_xyz: np.ndarray,
@@ -116,6 +116,77 @@ def write_clusters_as_obj(
                 # Erstelle eine Linie zwischen den beiden Vertices
                 f.write(f"l {v_counter + 1} {v_counter + 2}\n")
                 v_counter += 2
+
+
+def write_clusters_as_json(
+    slice_idx,
+    segments,
+    clusters,
+    output_dir,
+    z_value=0.0,
+):
+    """
+    Exportiert Cluster als JSON-Datei.
+    
+    slice_idx : int                      # Slice-ID
+    segments : list[ ((x1,y1),(x2,y2)), ... ] oder list[ ((x1,y1,z1),(x2,y2,z2)), ... ]
+    clusters : dict[int, np.ndarray]     # {cluster_id: indices in segments}
+    output_dir : str                     # Ausgabeverzeichnis
+    z_value : float                      # Z-Koordinate (2D -> setze 0.0)
+    """
+    segments = np.asarray(segments, dtype=float)
+    os.makedirs(output_dir, exist_ok=True)
+    json_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_clusters.json")
+    
+    # Erstelle JSON-Struktur
+    cluster_data = {
+        "slice_id": slice_idx,
+        "total_segments": len(segments),
+        "total_clusters": len(clusters),
+        "z_value": z_value,
+        "clusters": []
+    }
+    
+    for cid, idx in clusters.items():
+        idx = np.asarray(idx, dtype=int)
+        if idx.size == 0:
+            continue
+            
+        cluster_segments = []
+        
+        for si in idx:
+            segment = segments[si]
+            
+            # Prüfe ob 2D oder 3D Segmente
+            if segment.shape[1] == 2:  # 2D: ((x1,y1),(x2,y2))
+                (x1, y1), (x2, y2) = segment
+                z1 = z2 = z_value
+            elif segment.shape[1] == 3:  # 3D: ((x1,y1,z1),(x2,y2,z2))
+                (x1, y1, z1), (x2, y2, z2) = segment
+            else:
+                raise ValueError(f"Unerwartetes Segment-Format: {segment.shape}")
+            
+            # Segment als Dictionary mit Start- und Endpunkt
+            segment_data = {
+                "segment_index": int(si),
+                "start_point": {"x": float(x1), "y": float(y1), "z": float(z1)},
+                "end_point": {"x": float(x2), "y": float(y2), "z": float(z2)}
+            }
+            cluster_segments.append(segment_data)
+        
+        # Cluster-Information
+        cluster_info = {
+            "cluster_id": int(cid),
+            "segment_count": len(cluster_segments),
+            "segments": cluster_segments
+        }
+        cluster_data["clusters"].append(cluster_info)
+    
+    # JSON speichern
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(cluster_data, f, indent=2, ensure_ascii=False)
+    
+    print(f"  → Cluster JSON gespeichert: {json_path} ({len(clusters)} Cluster)")
 
 
 def save_slice_images(

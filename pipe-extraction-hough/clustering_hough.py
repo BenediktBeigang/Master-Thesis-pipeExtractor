@@ -3,6 +3,47 @@ from sklearn.cluster import DBSCAN
 import numpy as np
 
 
+def cluster_segments_strict(
+    segments,
+    delta_r_eq,
+    delta_deg,
+    min_samples=5,
+):
+    segs = np.asarray(segments, dtype=float)
+    segs_xy = segs[:, :, :2] if segs.shape[2] == 3 else segs
+    v = segs_xy[:, 1, :] - segs_xy[:, 0, :]
+    phi = np.mod(np.arctan2(v[:, 1], v[:, 0]), np.pi)
+    theta = np.mod(phi + np.pi / 2.0, np.pi)
+
+    all_pts_xy = segs_xy.reshape(-1, 2)
+    origin_xy = all_pts_xy.mean(axis=0)
+    mids = ((segs_xy - origin_xy)[:, 0, :] + (segs_xy - origin_xy)[:, 1, :]) * 0.5
+    rho = mids[:, 0] * np.cos(theta) + mids[:, 1] * np.sin(theta)
+
+    # axiale Winkeldifferenz (mod π)
+    dtheta = np.abs(theta[:, None] - theta[None, :])
+    dtheta = np.minimum(dtheta, np.pi - dtheta)
+    angle_chord = 2 * np.sin(dtheta)  # Distanzbeitrag Winkel
+
+    # ρ-Beitrag normalisieren auf gewünschte 1:1-Äquivalenz
+    rho_scale = delta_r_eq / (2 * np.sin(np.deg2rad(delta_deg)))
+    drho = np.abs(rho[:, None] - rho[None, :]) / rho_scale
+
+    # „UND“-Logik via Chebyshev-ähnlich: beide müssen ≤ eps sein
+    D = np.maximum(angle_chord, drho)
+    eps = 2 * np.sin(np.deg2rad(delta_deg))
+
+    labels = DBSCAN(eps=eps, min_samples=min_samples, metric="precomputed").fit_predict(
+        D
+    )
+    clusters = {
+        cid: np.where(labels == cid)[0] for cid in np.unique(labels) if cid != -1
+    }
+    return dict(
+        labels=labels, clusters=clusters, theta=theta, rho=rho, origin=origin_xy
+    )
+
+
 def cluster_segments(
     segments,
     eps_euclid,  # Epsilon im (cos2θ, sin2θ, ρ/scale)-Raum

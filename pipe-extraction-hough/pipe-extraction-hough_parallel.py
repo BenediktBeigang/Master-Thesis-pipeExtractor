@@ -30,6 +30,7 @@ from itertools import repeat
 import argparse
 from concurrent.futures import ProcessPoolExecutor
 import datetime
+import math
 from multiprocessing import get_context
 import os
 import time
@@ -38,9 +39,10 @@ import sys
 from calcSlice import get_z_slices, process_single_slice
 from clustering_hough import (
     cluster_segments,
+    cluster_segments_strict,
     subcluster_with_segement_z,
 )
-from export import write_obj_lines, write_clusters_as_obj
+from export import write_clusters_as_json, write_obj_lines, write_clusters_as_obj
 from merge_segments import merge_segments_in_clusters
 from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
 from util import load_las, prepare_output_directory
@@ -56,13 +58,13 @@ def main():
     ap.add_argument(
         "--thickness",
         type=float,
-        default=0.05,
+        default=0.1,
         help="Dicke der Z-Slices (Meter)",
     )
     ap.add_argument(
         "--cell-size",
         type=float,
-        default=0.05,
+        default=0.01,
         help="Raster-Zellgröße in m (Default: 0.05)",
     )
     ap.add_argument(
@@ -117,6 +119,7 @@ def main():
         local_gap_threshold=2.0,
         local_min_length=1.0,
         local_z_max=False,
+        merge_segments=False,
     )
 
     # Tasks in der Reihenfolge der Slices bauen (bewahrt Sortierung)
@@ -164,6 +167,13 @@ def main():
         print("Keine Linien in keinem einzigen Slice gefunden.", file=sys.stderr)
         sys.exit(0)
 
+    distance_tolerance_m = 1
+    angle_tolerance_deg = 5
+    angle_tolerance_radians = math.radians(angle_tolerance_deg)
+    rho_scale = (distance_tolerance_m) / (2 * math.sin(angle_tolerance_radians))
+    epsilon = math.sqrt(2) * 2 * math.sin(angle_tolerance_radians)
+    print(f"rho_scale: {rho_scale:.2f}, eps_euclid: {epsilon:.2f}")
+
     # Phase 2: Cluster über alle Slices
     print("Phase 2: Clustering über alle Segmente...")
     result_phase2_clustering = cluster_segments(
@@ -173,6 +183,13 @@ def main():
         rho_scale=1.3,
         preserve_noise=True,
     )
+
+    # result_phase2_clustering = cluster_segments_strict(
+    #     all_segments,
+    #     delta_r_eq=1.0,
+    #     delta_deg=5.0,
+    #     min_samples=3,
+    # )
 
     # write_clusters_as_obj(
     #     slice_idx=-1,
@@ -199,6 +216,13 @@ def main():
         clusters=result_phase3_clustering,
         output_dir="./output/obj",
     )
+
+    # write_clusters_as_json(
+    #     slice_idx=-1,
+    #     segments=all_segments,
+    #     clusters=result_phase3_clustering,
+    #     output_dir="./output/json",
+    # )
 
     all_segments = merge_segments_in_clusters(
         all_segments,
