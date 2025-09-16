@@ -43,6 +43,7 @@ from clustering_hough import (
     subcluster_with_segement_z,
 )
 from export import write_clusters_as_json, write_obj_lines, write_clusters_as_obj
+from grabPipe import adjust_segments_by_bbox, adjust_segments_by_bbox_regression
 from merge_segments import merge_segments_in_clusters
 from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
 from util import load_las, prepare_output_directory
@@ -119,7 +120,7 @@ def main():
         local_gap_threshold=2.0,
         local_min_length=1.0,
         local_z_max=False,
-        merge_segments=False,
+        merge_segments=True,
     )
 
     # Tasks in der Reihenfolge der Slices bauen (bewahrt Sortierung)
@@ -235,6 +236,25 @@ def main():
     write_obj_lines(
         all_segments,
         f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.output}",
+    )
+
+    phase_4_enabled = True
+    if phase_4_enabled:
+        print("Phase 4: Justierung der Segmente mit Punktwolke...")
+        all_segments = adjust_segments_by_bbox_regression(
+            xyz,
+            all_segments,
+            normal_length=1.0,
+            tangential_half_width=0.25,
+            min_pts=4,
+            max_shift=None,
+            samples_per_meter=1.0,
+            min_samples=3,
+        )
+
+    write_obj_lines(
+        all_segments,
+        f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_grab__{args.output}",
     )
 
     print(f"\nFertig!")
