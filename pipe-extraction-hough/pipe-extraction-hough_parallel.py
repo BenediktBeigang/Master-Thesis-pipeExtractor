@@ -42,7 +42,12 @@ from clustering_hough import (
     cluster_segments_strict,
     subcluster_with_segement_z,
 )
-from export import write_clusters_as_json, write_obj_lines, write_clusters_as_obj
+from export import (
+    write_clusters_as_json,
+    write_obj_lines,
+    write_clusters_as_obj,
+    write_segments_as_geojson,
+)
 from grabPipe import adjust_segments_by_bbox, adjust_segments_by_bbox_regression
 from merge_segments import merge_segments_in_clusters
 from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
@@ -60,13 +65,13 @@ def main():
         "--thickness",
         type=float,
         default=0.1,
-        help="Dicke der Z-Slices (Meter)",
+        help="Dicke der Z-Slices (Meter), verbessert z-Wert Genauigkeit",
     )
     ap.add_argument(
         "--cell-size",
         type=float,
         default=0.01,
-        help="Raster-Zellgröße in m (Default: 0.05)",
+        help="Raster-Zellgröße in m (Default: 0.05), verbessert Winkelgenauigkeit",
     )
     ap.add_argument(
         "--canny-sigma",
@@ -238,7 +243,7 @@ def main():
         f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.output}",
     )
 
-    phase_4_enabled = True
+    phase_4_enabled = False
     if phase_4_enabled:
         print("Phase 4: Justierung der Segmente mit Punktwolke...")
         all_segments = adjust_segments_by_bbox_regression(
@@ -252,9 +257,14 @@ def main():
             min_samples=3,
         )
 
-    write_obj_lines(
+        write_obj_lines(
+            all_segments,
+            f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_grab__{args.output}",
+        )
+
+    write_segments_as_geojson(
         all_segments,
-        f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_grab__{args.output}",
+        f"./output/json/{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_pipe.json",
     )
 
     print(f"\nFertig!")

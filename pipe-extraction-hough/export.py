@@ -1,3 +1,4 @@
+import math
 import os
 from typing import List, Tuple
 import numpy as np
@@ -5,6 +6,7 @@ import matplotlib.pyplot as plt
 from skimage.transform import hough_line_peaks
 import laspy
 import json
+
 
 def save_slice_las(
     sliced_xyz: np.ndarray,
@@ -127,7 +129,7 @@ def write_clusters_as_json(
 ):
     """
     Exportiert Cluster als JSON-Datei.
-    
+
     slice_idx : int                      # Slice-ID
     segments : list[ ((x1,y1),(x2,y2)), ... ] oder list[ ((x1,y1,z1),(x2,y2,z2)), ... ]
     clusters : dict[int, np.ndarray]     # {cluster_id: indices in segments}
@@ -137,26 +139,26 @@ def write_clusters_as_json(
     segments = np.asarray(segments, dtype=float)
     os.makedirs(output_dir, exist_ok=True)
     json_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_clusters.json")
-    
+
     # Erstelle JSON-Struktur
     cluster_data = {
         "slice_id": slice_idx,
         "total_segments": len(segments),
         "total_clusters": len(clusters),
         "z_value": z_value,
-        "clusters": []
+        "clusters": [],
     }
-    
+
     for cid, idx in clusters.items():
         idx = np.asarray(idx, dtype=int)
         if idx.size == 0:
             continue
-            
+
         cluster_segments = []
-        
+
         for si in idx:
             segment = segments[si]
-            
+
             # Prüfe ob 2D oder 3D Segmente
             if segment.shape[1] == 2:  # 2D: ((x1,y1),(x2,y2))
                 (x1, y1), (x2, y2) = segment
@@ -165,27 +167,27 @@ def write_clusters_as_json(
                 (x1, y1, z1), (x2, y2, z2) = segment
             else:
                 raise ValueError(f"Unerwartetes Segment-Format: {segment.shape}")
-            
+
             # Segment als Dictionary mit Start- und Endpunkt
             segment_data = {
                 "segment_index": int(si),
                 "start_point": {"x": float(x1), "y": float(y1), "z": float(z1)},
-                "end_point": {"x": float(x2), "y": float(y2), "z": float(z2)}
+                "end_point": {"x": float(x2), "y": float(y2), "z": float(z2)},
             }
             cluster_segments.append(segment_data)
-        
+
         # Cluster-Information
         cluster_info = {
             "cluster_id": int(cid),
             "segment_count": len(cluster_segments),
-            "segments": cluster_segments
+            "segments": cluster_segments,
         }
         cluster_data["clusters"].append(cluster_info)
-    
+
     # JSON speichern
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(cluster_data, f, indent=2, ensure_ascii=False)
-    
+
     print(f"  → Cluster JSON gespeichert: {json_path} ({len(clusters)} Cluster)")
 
 
@@ -323,3 +325,80 @@ def write_obj_lines(
             f.write(f"v {p1[0]:.6f} {p1[1]:.6f} {p1[2]:.6f}\n")
             f.write(f"l {vert_idx} {vert_idx+1}\n")
             vert_idx += 2
+
+
+def write_segments_as_geojson(
+    segments,
+    output_path: str,
+    z_value: float = 0.0,
+    crs_epsg: int | None = 25833,
+):
+    """
+    Exportiert alle Segmente als GeoJSON (FeatureCollection) mit LineStrings (Z-unterstützt).
+
+    Parameter
+    ---------
+    segments  : list/ndarray mit shape (N, 2, 2|3)   # [( (x1,y1[,z1]), (x2,y2[,z2]) ), ...]
+    output_path : str                                # '.../segments.geojson'
+    z_value : float                                  # Z, wenn Eingabe 2D ist
+    crs_epsg : int | None                            # versucht, nichtstandard 'crs' Feld zu setzen + .prj zu schreiben
+    """
+    segs = np.asarray(segments, dtype=float)
+    if segs.ndim != 3 or segs.shape[1] != 2 or segs.shape[2] not in (2, 3):
+        raise ValueError(f"Erwarte shape (N,2,2|3), erhalten: {segs.shape}")
+
+    has_z = segs.shape[2] == 3
+
+    features = []
+
+    def _seg_coords_with_z(seg):
+        if has_z:
+            (x1, y1, z1), (x2, y2, z2) = seg
+        else:
+            (x1, y1), (x2, y2) = seg
+            z1 = z2 = z_value
+        return [[float(x1), float(y1), float(z1)], [float(x2), float(y2), float(z2)]]
+
+    def _seg_length(seg):
+        if has_z:
+            (x1, y1, z1), (x2, y2, z2) = seg
+            dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
+        else:
+            (x1, y1), (x2, y2) = seg
+            dx, dy, dz = x2 - x1, y2 - y1, z_value - z_value
+        return float(math.sqrt(dx * dx + dy * dy + dz * dz))
+
+    # 1 Feature pro Segment (LineString) — alle Segmente werden ausgegeben
+    for si, seg in enumerate(segs):
+        features.append(
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": _seg_coords_with_z(seg),
+                },
+                "properties": {
+                    "segment_index": int(si),
+                    "length": _seg_length(seg),
+                    "has_z": bool(has_z),
+                },
+            }
+        )
+
+    # Top-Level GeoJSON
+    fc = {
+        "type": "FeatureCollection",
+        "name": f"segments",
+        "features": features,
+    }
+
+    # Nicht-RFC, aber von QGIS meist verstanden (falls du EPSG mitgeben willst):
+    if crs_epsg is not None:
+        fc["crs"] = {"type": "name", "properties": {"name": f"EPSG:{int(crs_epsg)}"}}
+
+    # Schreiben
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump(fc, f, ensure_ascii=False, indent=2)
+
+    print(f"  → GeoJSON gespeichert: {output_path} ({len(features)} Features)")
