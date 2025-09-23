@@ -330,75 +330,54 @@ def write_obj_lines(
 def write_segments_as_geojson(
     segments,
     output_path: str,
-    z_value: float = 0.0,
-    crs_epsg: int | None = 25833,
-):
+    crs_name: str = "unknown",
+) -> None:
     """
-    Exportiert alle Segmente als GeoJSON (FeatureCollection) mit LineStrings (Z-unterstützt).
+    Exportiert Liniensegmente als GeoJSON-Datei.
 
-    Parameter
-    ---------
-    segments  : list/ndarray mit shape (N, 2, 2|3)   # [( (x1,y1[,z1]), (x2,y2[,z2]) ), ...]
-    output_path : str                                # '.../segments.geojson'
-    z_value : float                                  # Z, wenn Eingabe 2D ist
-    crs_epsg : int | None                            # versucht, nichtstandard 'crs' Feld zu setzen + .prj zu schreiben
+    segments : list[ ((x1,y1),(x2,y2)), ... ] oder list[ ((x1,y1,z1),(x2,y2,z2)), ... ]
+    output_path : str                    # Ausgabepfad für die GeoJSON-Datei
+    crs_name : str                      # Name des Koordinatenreferenzsystems
     """
-    segs = np.asarray(segments, dtype=float)
-    if segs.ndim != 3 or segs.shape[1] != 2 or segs.shape[2] not in (2, 3):
-        raise ValueError(f"Erwarte shape (N,2,2|3), erhalten: {segs.shape}")
+    segments = np.asarray(segments, dtype=float)
 
-    has_z = segs.shape[2] == 3
+    # Bestimme ob 2D oder 3D Segmente
+    has_z = segments.shape[2] == 3 if len(segments) > 0 else False
 
-    features = []
-
-    def _seg_coords_with_z(seg):
-        if has_z:
-            (x1, y1, z1), (x2, y2, z2) = seg
-        else:
-            (x1, y1), (x2, y2) = seg
-            z1 = z2 = z_value
-        return [[float(x1), float(y1), float(z1)], [float(x2), float(y2), float(z2)]]
-
-    def _seg_length(seg):
-        if has_z:
-            (x1, y1, z1), (x2, y2, z2) = seg
-            dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
-        else:
-            (x1, y1), (x2, y2) = seg
-            dx, dy, dz = x2 - x1, y2 - y1, z_value - z_value
-        return float(math.sqrt(dx * dx + dy * dy + dz * dz))
-
-    # 1 Feature pro Segment (LineString) — alle Segmente werden ausgegeben
-    for si, seg in enumerate(segs):
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": {
-                    "type": "LineString",
-                    "coordinates": _seg_coords_with_z(seg),
-                },
-                "properties": {
-                    "segment_index": int(si),
-                    "length": _seg_length(seg),
-                    "has_z": bool(has_z),
-                },
-            }
-        )
-
-    # Top-Level GeoJSON
-    fc = {
+    # Erstelle GeoJSON-Struktur
+    geojson_data = {
         "type": "FeatureCollection",
-        "name": f"segments",
-        "features": features,
+        "name": "segments",
+        "features": [],
+        "crs": {"type": "name", "properties": {"name": crs_name}},
     }
 
-    # Nicht-RFC, aber von QGIS meist verstanden (falls du EPSG mitgeben willst):
-    if crs_epsg is not None:
-        fc["crs"] = {"type": "name", "properties": {"name": f"EPSG:{int(crs_epsg)}"}}
+    # Füge Liniensegmente als Features hinzu
+    for i, segment in enumerate(segments):
+        if has_z:  # 3D: ((x1,y1,z1),(x2,y2,z2))
+            (x1, y1, z1), (x2, y2, z2) = segment
+            coordinates = [
+                [float(x1), float(y1), float(z1)],
+                [float(x2), float(y2), float(z2)],
+            ]
+        else:  # 2D: ((x1,y1),(x2,y2))
+            (x1, y1), (x2, y2) = segment
+            coordinates = [
+                [float(x1), float(y1), 0],
+                [float(x2), float(y2), 0],
+            ]
 
-    # Schreiben
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+        feature = {
+            "type": "Feature",
+            "geometry": {"type": "LineString", "coordinates": coordinates},
+            "properties": {
+                "segment_index": i,
+                "has_z": True,
+            },
+        }
+
+        geojson_data["features"].append(feature)
+
+    # GeoJSON speichern
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(fc, f, ensure_ascii=False, indent=2)
-
-    print(f"  → GeoJSON gespeichert: {output_path} ({len(features)} Features)")
+        json.dump(geojson_data, f, indent=2, ensure_ascii=False)

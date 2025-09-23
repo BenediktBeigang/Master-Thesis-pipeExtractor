@@ -264,7 +264,7 @@ def main():
 
     write_segments_as_geojson(
         all_segments,
-        f"./output/json/{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_pipe.json",
+        f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.output.replace('.obj','.geojson')}",
     )
 
     print(f"\nFertig!")
