@@ -255,7 +255,7 @@ def main():
             xyz,
             all_segments,
             normal_length=1.0,
-            tangential_half_width=0.25,
+            tangential_half_width=0.1,
             min_pts=4,
             max_shift=None,
             samples_per_meter=1.0,

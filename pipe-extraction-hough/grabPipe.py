@@ -11,12 +11,66 @@ import math
 import numpy as np
 from scipy.stats import qmc
 from scipy.spatial import KDTree
-import open3d as o3d
+
+# import open3d as o3d
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
     n = np.linalg.norm(v)
     return v / n if n > 0 else v
+
+
+def _compute_quantized_z(pos, z_values: np.ndarray, bucket_size: float = 0.01) -> float:
+    """
+    Quantisiert Z-Werte in Buckets und gibt den Bucket-Mittelpunkt zurück,
+    bei dem erstmals der Schwellwert (Mittelwert der Bucket-Häufigkeiten) überschritten wird.
+    """
+    if len(z_values) == 0:
+        return 0.0
+
+    # Buckets erstellen
+    z_min, z_max = z_values.min(), z_values.max()
+    num_buckets = max(1, int(np.ceil((z_max - z_min) / bucket_size)))
+
+    if num_buckets == 1:
+        return z_values.mean()
+
+    # Histogramm erstellen
+    counts, bin_edges = np.histogram(z_values, bins=num_buckets, range=(z_min, z_max))
+
+    # Schwellwert als Mittelwert der Häufigkeiten
+    threshold = counts.mean() / 0.5
+
+    # Ersten Bucket über Schwellwert finden
+    over_threshold = np.where(counts >= threshold)[0]
+    if len(over_threshold) == 0:
+        # Fallback: höchsten Peak nehmen
+        bucket_idx = np.argmax(counts)
+    else:
+        bucket_idx = over_threshold[-1]  # Letzten (höchsten) Index nehmen
+
+    # Bucket-Mittelpunkt zurückgeben
+    bucket_center = (bin_edges[bucket_idx] + bin_edges[bucket_idx + 1]) / 2
+
+    # print(
+    #     f"Pos: {pos}, Z-Buckets: {counts}, Threshold: {threshold:.2f}, Center: {bucket_center:.3f}"
+    # )
+
+    # import matplotlib.pyplot as plt
+
+    # bucket_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+    # plt.bar(bucket_centers, counts, width=bucket_size, align="center", alpha=0.7)
+    # plt.axhline(y=threshold, color="r", linestyle="--", label="Threshold")
+    # plt.axvline(
+    #     x=bucket_center, color="g", linestyle="--", label="Selected Bucket Center"
+    # )
+    # plt.xlabel("Z Value")
+    # plt.ylabel("Count")
+    # plt.title("Z Value Buckets")
+    # plt.legend()
+    # plt.show()
+
+    return bucket_center
 
 
 # Änderungen:
@@ -25,7 +79,8 @@ def _unit(v: np.ndarray) -> np.ndarray:
 # quantisieren mit buckets der größe 0.05, mittelwert bestimmen und als schwellwert nehmen
 # z-Wert für resultierender Punkt ist bucket bei dem das erste mal der schwellwert überschritten wird
 def _bbox_centroid_for_endpoint(
-    XY: np.ndarray,
+    cloud_2D: np.ndarray,
+    cloud_3D: np.ndarray,
     endpoint_xy: np.ndarray,
     t_hat: np.ndarray,
     n_hat: np.ndarray,
@@ -42,7 +97,7 @@ def _bbox_centroid_for_endpoint(
     Auswahl-Box: |x| <= w  UND  |y| <= L (beide Richtungen gleichzeitig)
     Mit optionalem Poisson-Disk-Subsampling in der lokalen Box.
     """
-    D = XY - endpoint_xy[None, :]  # (N,2)
+    D = cloud_2D - endpoint_xy[None, :]  # (N,2)
     x_local = D @ t_hat
     y_local = D @ n_hat
 
@@ -52,11 +107,15 @@ def _bbox_centroid_for_endpoint(
     )
     idx = np.nonzero(mask)[0]
     if idx.size < min_pts:
-        return endpoint_xy, 0
+        return endpoint_xy, 0.0, 0
 
     # Ohne Subsampling: wie gehabt Mittelwert über alle Box-Punkte
     if poisson_radius is None or poisson_radius <= 0:
-        return XY[idx].mean(axis=0), idx.size
+        selected_xy = cloud_2D[idx].mean(axis=0)
+        # Z-Wert-Verarbeitung mit Quantisierung
+        z_values = cloud_3D[idx, 2]
+        selected_z = _compute_quantized_z(endpoint_xy, z_values)
+        return selected_xy, selected_z, idx.size
 
     # --- Poisson-Disk-Subsampling im lokalen Rechteck [-w, w] x [-L, L] ---
     # 1) Generiere Poisson-Disk-Samples im lokalen Domain-Rechteck
@@ -74,20 +133,43 @@ def _bbox_centroid_for_endpoint(
 
     # Fallback: Wenn aus irgendeinem Grund keine Samples entstehen, nimm alle Punkte
     if S.size == 0:
-        return XY[idx].mean(axis=0), idx.size
+        return cloud_2D[idx].mean(axis=0), idx.size
 
     # 2) Mappe Samples auf die nächstgelegenen Originalpunkte in der Box (lokal!)
     P_local = np.column_stack((x_local[idx], y_local[idx]))  # (K,2)
     kdt = KDTree(P_local)
     nn_idx = kdt.query(S, k=1)[1]  # (M,) Indizes innerhalb von 'idx'
     nn_idx = np.unique(nn_idx)  # eindeutige Auswahl
+
     if nn_idx.size < min_pts:
         # Wenn zu wenige Punkte übrig bleiben, fallback auf alle Box-Punkte
-        return XY[idx].mean(axis=0), idx.size
+        selected_xy = cloud_2D[idx].mean(axis=0)
+        z_values = cloud_3D[idx, 2]
+        selected_z = _compute_quantized_z(endpoint_xy, z_values)
+        return selected_xy, selected_z, idx.size
 
     # 3) Schwerpunkt in Weltkoordinaten über der subsampleten Teilmenge
     idx_sub = idx[nn_idx]
-    return XY[idx_sub].mean(axis=0), idx_sub.size
+    selected_xy = cloud_2D[idx_sub].mean(axis=0)
+    z_values = cloud_3D[idx_sub, 2]
+    selected_z = _compute_quantized_z(endpoint_xy, z_values)
+    print("Full compute", selected_xy, selected_z)
+    return selected_xy, selected_z, idx_sub.size
+
+
+def extract_segments(points_3D: np.ndarray) -> list:
+    # 1. berechne die geraden zwischen allen punkten
+    # 2. berechne für jede gerade ihren winkel alpha (ohne z)
+    # 3. berechne für jede gerade ihren winkel beta mit z als lot um den höhenunterschied zu berücksichtigen
+    # 4. iteriere durch alle geraden und baue iterativ ein segment auf
+    # a. wenn sich zwei mal (oder mehr) in folge alpha um mehr als 10° unterscheidet zum vorgänger lösche ignoriere den punkt (selbes segment)
+    # b. wenn sich alpha nur ein mal um mehr als 10° unterscheidet, lösche die gerade, beende das segment und starte mit dem punkt ein neues
+    # c. wenn sich alpha um weniger als 10° unterscheidet, erweitere das segment/behalte die gerade / den punkt
+    # 5. iteriere ein zweites mal für jedes teil segment durch die geraden
+    # a. wenn sich beta um mehr als 10° unterscheidet, beginne ein neues segment
+    # 6. lösche alle teilsegmente die nur aus einem punkt bestehen
+    # 7. führe eine 3d regression auf jedem teilsegment durch und gebe alle segmente zurück
+    return []
 
 
 def adjust_segments_by_bbox_regression(
@@ -184,31 +266,33 @@ def adjust_segments_by_bbox_regression(
                 continue
 
             XY_candidates = XY[candidate_indices]
+            xyz_candidates = xyz[candidate_indices]
 
             # BBox-Centroid für diesen Sample-Punkt
-            c_xy, n_pts = _bbox_centroid_for_endpoint(
+            grabed_xy, grabed_z, n_pts = _bbox_centroid_for_endpoint(
                 XY_candidates,
+                xyz_candidates,
                 sample_point_xy,
                 t_hat,
                 n_hat,
                 tangential_half_width,
                 normal_length,
                 min_pts,
-                # poisson_radius=0.02,
+                poisson_radius=0.02,
             )
 
             # Nur verwenden wenn genügend Punkte gefunden
             if n_pts > 0:
                 # Optional: Shift begrenzen
                 if max_shift is not None:
-                    d = np.linalg.norm(c_xy - sample_point_xy)
+                    d = np.linalg.norm(grabed_xy - sample_point_xy)
                     if d > max_shift:
-                        c_xy = sample_point_xy + (c_xy - sample_point_xy) * (
+                        grabed_xy = sample_point_xy + (grabed_xy - sample_point_xy) * (
                             max_shift / d
                         )
 
                 # 3D-Punkt: XY aus BBox, Z interpoliert
-                c_3d = np.array([c_xy[0], c_xy[1], sample_point_3d[2]])
+                c_3d = np.array([grabed_xy[0], grabed_xy[1], grabed_z])
                 collected_points.append(c_3d)
                 collected_weights.append(n_pts)  # Gewichtung nach Anzahl Punkte
 
@@ -216,9 +300,9 @@ def adjust_segments_by_bbox_regression(
                     {
                         "t_hat": t_hat.copy(),
                         "n_hat": n_hat.copy(),
-                        "c_xy": c_xy.copy(),
+                        "c_xy": grabed_xy.copy(),
                         "sample_point_xy": sample_point_xy.copy(),
-                        "z": sample_point_3d[2],
+                        "z": grabed_z,
                     }
                 )
 
@@ -228,6 +312,9 @@ def adjust_segments_by_bbox_regression(
             continue
 
         collected_points = np.array(collected_points)
+
+        # extract_segments(collected_points)
+
         collected_weights = np.array(collected_weights)
 
         # Gewichtete lineare Regression in 3D
