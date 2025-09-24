@@ -7,9 +7,11 @@ Eingabe/Output sind IDENTISCH zum merge_segments_in_clusters-Format:
 """
 
 from __future__ import annotations
+import math
 import numpy as np
 from scipy.stats import qmc
 from scipy.spatial import KDTree
+import open3d as o3d
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
@@ -17,6 +19,11 @@ def _unit(v: np.ndarray) -> np.ndarray:
     return v / n if n > 0 else v
 
 
+# Änderungen:
+# 3d Punktwolke übergeben und an betreffenden stellen die 2d XY Koordinaten extrahieren
+# Am Ende mit den indizes der bbox punkte, die z-Werte der gefundenen Punkte extrahieren
+# quantisieren mit buckets der größe 0.05, mittelwert bestimmen und als schwellwert nehmen
+# z-Wert für resultierender Punkt ist bucket bei dem das erste mal der schwellwert überschritten wird
 def _bbox_centroid_for_endpoint(
     XY: np.ndarray,
     endpoint_xy: np.ndarray,
@@ -83,89 +90,6 @@ def _bbox_centroid_for_endpoint(
     return XY[idx_sub].mean(axis=0), idx_sub.size
 
 
-def adjust_segments_by_bbox(
-    xyz: np.ndarray,
-    segments_2x3: list,
-    *,
-    normal_length: float = 0.8,  # Länge entlang Normalenrichtung (m)
-    tangential_half_width: float = 0.25,  # halbe Breite entlang Segment (m)
-    min_pts: int = 8,
-    max_shift: float | None = None,  # Begrenzung des Shifts (z.B. = normal_length)
-) -> list:
-    """
-    Parameters
-    ----------
-    xyz : np.ndarray (N,3)
-    segments_2x3 : list of np.ndarray, jedes (2,3)
-    Returns
-    -------
-    list of np.ndarray, jedes (2,3)  # exakt wie merge_segments_in_clusters
-    """
-    if not isinstance(xyz, np.ndarray) or xyz.shape[1] < 2:
-        raise ValueError("xyz muss [N,3] sein.")
-    XY = xyz[:, :2].astype(float, copy=False)
-
-    out_segments = []
-    for seg in segments_2x3:
-        seg = np.asarray(seg, dtype=float)
-        if seg.shape != (2, 3):
-            raise ValueError(f"Segment hat Form {seg.shape}, erwartet (2,3).")
-
-        p1 = seg[0].copy()
-        p2 = seg[1].copy()
-        p1_xy, p2_xy = p1[:2], p2[:2]
-
-        # Tangente/Normale aus XY
-        t_hat = _unit(p2_xy - p1_xy)
-        if np.allclose(t_hat, 0):
-            out_segments.append(seg)  # degeneriert
-            continue
-        n_hat = np.array([-t_hat[1], t_hat[0]])
-
-        # Ende 1
-        c1_xy, n1 = _bbox_centroid_for_endpoint(
-            XY,
-            p1_xy,
-            t_hat,
-            n_hat,
-            tangential_half_width,
-            normal_length,
-            min_pts,
-            poisson_radius=0.02,
-        )
-        # Ende 2
-        c2_xy, n2 = _bbox_centroid_for_endpoint(
-            XY,
-            p2_xy,
-            t_hat,
-            n_hat,
-            tangential_half_width,
-            normal_length,
-            min_pts,
-            poisson_radius=0.02,
-        )
-
-        # Optional Shift begrenzen
-        if max_shift is not None and n1 > 0:
-            d = np.linalg.norm(c1_xy - p1_xy)
-            if d > max_shift:
-                c1_xy = p1_xy + (c1_xy - p1_xy) * (max_shift / d)
-        if max_shift is not None and n2 > 0:
-            d = np.linalg.norm(c2_xy - p2_xy)
-            if d > max_shift:
-                c2_xy = p2_xy + (c2_xy - p2_xy) * (max_shift / d)
-
-        # Nur XY snappen, Z des jeweiligen Endes unverändert lassen
-        if n1 > 0:
-            p1[:2] = c1_xy
-        if n2 > 0:
-            p2[:2] = c2_xy
-
-        out_segments.append(np.vstack((p1, p2)))
-
-    return out_segments
-
-
 def adjust_segments_by_bbox_regression(
     xyz: np.ndarray,
     segments_2x3: list,
@@ -194,6 +118,25 @@ def adjust_segments_by_bbox_regression(
         raise ValueError("xyz muss [N,3] sein.")
     XY = xyz[:, :2].astype(float, copy=False)
 
+    # print("Erstelle 2D KDTree...")
+    # XY3D = np.c_[XY, np.zeros(len(XY))]
+
+    # print("Erstelle Open3D KDTree mit Voxel-Downsampling...")
+    # # Open3D Punktwolke
+    # pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(XY3D))
+    # print(f"Originalpunkte: {len(pcd.points)}")
+    # # Voxel-Downsampling in 2D (Voxelgröße z.B. 0.02)
+    # pcd_down = pcd.voxel_down_sample(voxel_size=0.02)
+    # print(f"Downsampled Punkte: {len(pcd_down.points)}")
+    # # Downsampled Koordinaten zurückholen
+    # XY_down = np.asarray(pcd_down.points)[:, :2]
+    # print(f"XY Downshape: {XY_down.shape}")
+    # kdtree = KDTree(XY_down)
+
+    kdtree = KDTree(XY)
+
+    print("Justiere Segmente...")
+    sample_data = []
     out_segments = []
     for index, seg in enumerate(segments_2x3):
         if index % 5 == 0:
@@ -227,21 +170,31 @@ def adjust_segments_by_bbox_regression(
         collected_points = []
         collected_weights = []
 
+        # Maximale Suchradius für alle Sample-Punkte dieses Segments
+        search_radius = math.sqrt(tangential_half_width**2 + normal_length**2)
+
         for t in t_values:
             # Interpolierter Punkt auf dem Segment
             sample_point_3d = p1 + t * segment_vec
             sample_point_xy = sample_point_3d[:2]
 
+            # Nur relevante Punkte per KDTree
+            candidate_indices = kdtree.query_ball_point(sample_point_xy, search_radius)
+            if len(candidate_indices) < min_pts:
+                continue
+
+            XY_candidates = XY[candidate_indices]
+
             # BBox-Centroid für diesen Sample-Punkt
             c_xy, n_pts = _bbox_centroid_for_endpoint(
-                XY,
+                XY_candidates,
                 sample_point_xy,
                 t_hat,
                 n_hat,
                 tangential_half_width,
                 normal_length,
                 min_pts,
-                poisson_radius=0.02,
+                # poisson_radius=0.02,
             )
 
             # Nur verwenden wenn genügend Punkte gefunden
@@ -258,6 +211,16 @@ def adjust_segments_by_bbox_regression(
                 c_3d = np.array([c_xy[0], c_xy[1], sample_point_3d[2]])
                 collected_points.append(c_3d)
                 collected_weights.append(n_pts)  # Gewichtung nach Anzahl Punkte
+
+                sample_data.append(
+                    {
+                        "t_hat": t_hat.copy(),
+                        "n_hat": n_hat.copy(),
+                        "c_xy": c_xy.copy(),
+                        "sample_point_xy": sample_point_xy.copy(),
+                        "z": sample_point_3d[2],
+                    }
+                )
 
         # Fallback: Wenn keine gültigen Punkte gefunden, ursprüngliches Segment behalten
         if len(collected_points) < 2:
@@ -298,4 +261,90 @@ def adjust_segments_by_bbox_regression(
 
         out_segments.append(np.vstack((new_p1, new_p2)))
 
+        _export_sample_vectors_to_obj(sample_data, tangential_half_width, normal_length)
+
     return out_segments
+
+
+def _export_sample_vectors_to_obj(
+    sample_data: list, tangential_half_width: float, normal_length: float
+):
+    """
+    Exportiert Sample-Point-Vektoren in eine OBJ-Datei.
+
+    Für jeden Sample-Point werden exportiert:
+    - Tangentialvektor (t_hat) skaliert mit tangential_half_width
+    - Normalenvektor (n_hat) skaliert mit normal_length
+    - Resultierender Punkt (c_xy) als Punkt
+    """
+    with open("./sample_vectors.obj", "w") as f:
+        f.write("# Sample Point Vectors Export\n")
+        f.write(f"# Tangential half width: {tangential_half_width}\n")
+        f.write(f"# Normal length: {normal_length}\n")
+        f.write(f"# Total sample points: {len(sample_data)}\n\n")
+
+        vertex_count = 0
+
+        for i, data in enumerate(sample_data):
+            t_hat = data["t_hat"]
+            n_hat = data["n_hat"]
+            c_xy = data["c_xy"]
+            sample_xy = data["sample_point_xy"]
+            z = data["z"]
+
+            f.write(f"# Sample point {i}\n")
+
+            # Startpunkt (Sample-Point-Position)
+            start_3d = [sample_xy[0], sample_xy[1], z]
+            f.write(f"v {start_3d[0]:.6f} {start_3d[1]:.6f} {start_3d[2]:.6f}\n")
+
+            # Endpunkt des Tangentialvektors (beide Richtungen)
+            t_end1_3d = [
+                start_3d[0] + t_hat[0] * tangential_half_width,
+                start_3d[1] + t_hat[1] * tangential_half_width,
+                z,
+            ]
+            t_end2_3d = [
+                start_3d[0] - t_hat[0] * tangential_half_width,
+                start_3d[1] - t_hat[1] * tangential_half_width,
+                z,
+            ]
+            f.write(f"v {t_end1_3d[0]:.6f} {t_end1_3d[1]:.6f} {t_end1_3d[2]:.6f}\n")
+            f.write(f"v {t_end2_3d[0]:.6f} {t_end2_3d[1]:.6f} {t_end2_3d[2]:.6f}\n")
+
+            # Endpunkt des Normalenvektors (beide Richtungen)
+            n_end1_3d = [
+                start_3d[0] + n_hat[0] * normal_length,
+                start_3d[1] + n_hat[1] * normal_length,
+                z,
+            ]
+            n_end2_3d = [
+                start_3d[0] - n_hat[0] * normal_length,
+                start_3d[1] - n_hat[1] * normal_length,
+                z,
+            ]
+            f.write(f"v {n_end1_3d[0]:.6f} {n_end1_3d[1]:.6f} {n_end1_3d[2]:.6f}\n")
+            f.write(f"v {n_end2_3d[0]:.6f} {n_end2_3d[1]:.6f} {n_end2_3d[2]:.6f}\n")
+
+            # Resultierender Punkt (c_xy)
+            result_3d = [c_xy[0], c_xy[1], z]
+            f.write(f"v {result_3d[0]:.6f} {result_3d[1]:.6f} {result_3d[2]:.6f}\n")
+
+            # Linien definieren (OBJ verwendet 1-basierte Indizes)
+            base_idx = vertex_count + 1
+
+            # Tangentialvektor-Linien (Kreuz)
+            f.write(f"l {base_idx} {base_idx + 1}\n")  # Start -> t_end1
+            f.write(f"l {base_idx} {base_idx + 2}\n")  # Start -> t_end2
+
+            # Normalenvektor-Linien (Kreuz)
+            f.write(f"l {base_idx} {base_idx + 3}\n")  # Start -> n_end1
+            f.write(f"l {base_idx} {base_idx + 4}\n")  # Start -> n_end2
+
+            # Linie zum resultierenden Punkt
+            f.write(f"l {base_idx} {base_idx + 5}\n")  # Start -> result
+
+            vertex_count += 6  # 6 Vertices pro Sample-Point
+            f.write("\n")
+
+    print(f"Sample-Vektoren exportiert nach: ./sample_vectors.obj")

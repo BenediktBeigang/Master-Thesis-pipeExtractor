@@ -48,7 +48,7 @@ from export import (
     write_clusters_as_obj,
     write_segments_as_geojson,
 )
-from grabPipe import adjust_segments_by_bbox, adjust_segments_by_bbox_regression
+from grabPipe import adjust_segments_by_bbox_regression
 from merge_segments import merge_segments_in_clusters
 from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
 from util import load_las, prepare_output_directory
@@ -243,7 +243,12 @@ def main():
         f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.output}",
     )
 
-    phase_4_enabled = False
+    # 1. grab nur mit xy werten
+    # 2. z-position bestimmen
+    # 3. in xy-ebene für jedes teilsegment punkte verbinden und nach brüchen suchen
+    # 4. in z-richtung verbinden und nach brüchen suchen
+    # 5. Brüche aus 3+4 kombinieren und Teilsegmente innerhalb verbinden durch regression
+    phase_4_enabled = True
     if phase_4_enabled:
         print("Phase 4: Justierung der Segmente mit Punktwolke...")
         all_segments = adjust_segments_by_bbox_regression(
