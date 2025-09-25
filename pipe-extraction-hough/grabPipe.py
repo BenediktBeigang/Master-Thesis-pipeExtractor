@@ -11,8 +11,8 @@ import math
 import numpy as np
 from scipy.stats import qmc
 from scipy.spatial import KDTree
-
-# import open3d as o3d
+from custom_types import Segment3DArray
+from samplePointMerge import extract_segments
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
@@ -20,7 +20,7 @@ def _unit(v: np.ndarray) -> np.ndarray:
     return v / n if n > 0 else v
 
 
-def _compute_quantized_z(pos, z_values: np.ndarray, bucket_size: float = 0.01) -> float:
+def _compute_quantized_z(z_values: np.ndarray, bucket_size: float = 0.01) -> float:
     """
     Quantisiert Z-Werte in Buckets und gibt den Bucket-Mittelpunkt zurück,
     bei dem erstmals der Schwellwert (Mittelwert der Bucket-Häufigkeiten) überschritten wird.
@@ -39,7 +39,7 @@ def _compute_quantized_z(pos, z_values: np.ndarray, bucket_size: float = 0.01) -
     counts, bin_edges = np.histogram(z_values, bins=num_buckets, range=(z_min, z_max))
 
     # Schwellwert als Mittelwert der Häufigkeiten
-    threshold = counts.mean() / 0.5
+    threshold = counts.mean() / 2
 
     # Ersten Bucket über Schwellwert finden
     over_threshold = np.where(counts >= threshold)[0]
@@ -56,6 +56,11 @@ def _compute_quantized_z(pos, z_values: np.ndarray, bucket_size: float = 0.01) -
     #     f"Pos: {pos}, Z-Buckets: {counts}, Threshold: {threshold:.2f}, Center: {bucket_center:.3f}"
     # )
 
+    # if int(pos[0]) == 875320 and int(pos[1]) == 5715369:
+    #     print(f"Variant: {variant}")
+    #     print(f"Z-Werte: {len(z_values)}")
+    #     print(f"counts: {counts}, mean: {counts.mean():.2f}")
+    #     print(f"threshold: {threshold:.2f}, center: {bucket_center:.3f}")
     # import matplotlib.pyplot as plt
 
     # bucket_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
@@ -112,9 +117,8 @@ def _bbox_centroid_for_endpoint(
     # Ohne Subsampling: wie gehabt Mittelwert über alle Box-Punkte
     if poisson_radius is None or poisson_radius <= 0:
         selected_xy = cloud_2D[idx].mean(axis=0)
-        # Z-Wert-Verarbeitung mit Quantisierung
         z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(endpoint_xy, z_values)
+        selected_z = _compute_quantized_z(z_values)
         return selected_xy, selected_z, idx.size
 
     # --- Poisson-Disk-Subsampling im lokalen Rechteck [-w, w] x [-L, L] ---
@@ -133,7 +137,10 @@ def _bbox_centroid_for_endpoint(
 
     # Fallback: Wenn aus irgendeinem Grund keine Samples entstehen, nimm alle Punkte
     if S.size == 0:
-        return cloud_2D[idx].mean(axis=0), idx.size
+        selected_xy = cloud_2D[idx].mean(axis=0)
+        z_values = cloud_3D[idx, 2]
+        selected_z = _compute_quantized_z(z_values)
+        return selected_xy, selected_z, idx.size
 
     # 2) Mappe Samples auf die nächstgelegenen Originalpunkte in der Box (lokal!)
     P_local = np.column_stack((x_local[idx], y_local[idx]))  # (K,2)
@@ -145,36 +152,37 @@ def _bbox_centroid_for_endpoint(
         # Wenn zu wenige Punkte übrig bleiben, fallback auf alle Box-Punkte
         selected_xy = cloud_2D[idx].mean(axis=0)
         z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(endpoint_xy, z_values)
+        selected_z = _compute_quantized_z(z_values)
         return selected_xy, selected_z, idx.size
 
     # 3) Schwerpunkt in Weltkoordinaten über der subsampleten Teilmenge
     idx_sub = idx[nn_idx]
     selected_xy = cloud_2D[idx_sub].mean(axis=0)
     z_values = cloud_3D[idx_sub, 2]
-    selected_z = _compute_quantized_z(endpoint_xy, z_values)
-    print("Full compute", selected_xy, selected_z)
+    selected_z = _compute_quantized_z(z_values)
     return selected_xy, selected_z, idx_sub.size
 
 
-def extract_segments(points_3D: np.ndarray) -> list:
-    # 1. berechne die geraden zwischen allen punkten
-    # 2. berechne für jede gerade ihren winkel alpha (ohne z)
-    # 3. berechne für jede gerade ihren winkel beta mit z als lot um den höhenunterschied zu berücksichtigen
-    # 4. iteriere durch alle geraden und baue iterativ ein segment auf
-    # a. wenn sich zwei mal (oder mehr) in folge alpha um mehr als 10° unterscheidet zum vorgänger lösche ignoriere den punkt (selbes segment)
-    # b. wenn sich alpha nur ein mal um mehr als 10° unterscheidet, lösche die gerade, beende das segment und starte mit dem punkt ein neues
-    # c. wenn sich alpha um weniger als 10° unterscheidet, erweitere das segment/behalte die gerade / den punkt
-    # 5. iteriere ein zweites mal für jedes teil segment durch die geraden
-    # a. wenn sich beta um mehr als 10° unterscheidet, beginne ein neues segment
-    # 6. lösche alle teilsegmente die nur aus einem punkt bestehen
-    # 7. führe eine 3d regression auf jedem teilsegment durch und gebe alle segmente zurück
-    return []
+# def extract_segments(points_3D: np.ndarray) -> list:
+#     # 1. iteriere durch alle punkte
+#     # a. erstelle neuen bucket wenn keine vorhanden mit dem ersten punkt
+#     # b. wenn das delta-z zum nächsten punkt um mehr als 0.3 abweicht vom avg delta-z des buckets, beende den bucket und erstelle eine neue mit dem punkt
+
+#     # 2. Für jeden bucket:
+#     # a. itereriere durch alle punkte und berechne den winkel zum nächsten punkt
+#     # b. clustere auf den winkeln mit toleranz von 10 grad
+#     # d. am ende wähle das cluster mit der längsten Gesammtlänge aus
+#     # e. Nutze approcimate_polygon von skimage
+#     # f. finde für jeden punkt mittels der ursprünglichen 3d-punkte und gib füge alle segmente der ergebnisliste hinzu
+
+#     # coords: Nx2 numpy array
+#     approx = approximate_polygon(points_3D[:, :2], tolerance=1.0)
+#     return []
 
 
 def adjust_segments_by_bbox_regression(
     xyz: np.ndarray,
-    segments_2x3: list,
+    segments_2x3: Segment3DArray,
     *,
     normal_length: float = 1.0,  # Länge entlang Normalenrichtung (m)
     tangential_half_width: float = 0.25,  # halbe Breite entlang Segment (m)
@@ -182,7 +190,7 @@ def adjust_segments_by_bbox_regression(
     max_shift: float | None = None,  # Begrenzung des Shifts (z.B. = normal_length)
     samples_per_meter: float = 1.0,  # Anzahl Zwischenpunkte pro Meter Segmentlänge
     min_samples: int = 3,  # Mindestanzahl Samples (inkl. Endpunkte)
-) -> list:
+) -> Segment3DArray:
     """
     Parameters
     ----------
@@ -219,7 +227,7 @@ def adjust_segments_by_bbox_regression(
 
     print("Justiere Segmente...")
     sample_data = []
-    out_segments = []
+    out_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
     for index, seg in enumerate(segments_2x3):
         if index % 5 == 0:
             print(f"Segment {index}/{len(segments_2x3)}")
@@ -237,7 +245,7 @@ def adjust_segments_by_bbox_regression(
         segment_length = np.linalg.norm(segment_vec)
 
         if segment_length < 1e-6:
-            out_segments.append(seg)  # degeneriert
+            out_segments = np.vstack([out_segments, seg])  # degeneriert
             continue
 
         # Anzahl Sample-Punkte basierend auf Segmentlänge
@@ -308,45 +316,14 @@ def adjust_segments_by_bbox_regression(
 
         # Fallback: Wenn keine gültigen Punkte gefunden, ursprüngliches Segment behalten
         if len(collected_points) < 2:
-            out_segments.append(seg)
+            seg_reshaped = seg.astype(float).reshape(1, 2, 3)
+            out_segments = np.vstack([out_segments, seg_reshaped])
             continue
 
         collected_points = np.array(collected_points)
 
-        # extract_segments(collected_points)
-
-        collected_weights = np.array(collected_weights)
-
-        # Gewichtete lineare Regression in 3D
-        # Schwerpunkt der Punkte
-        weights_sum = collected_weights.sum()
-        centroid = np.average(collected_points, axis=0, weights=collected_weights)
-
-        # Gewichtete Kovarianzmatrix
-        X_centered = collected_points - centroid
-        W = np.diag(collected_weights / weights_sum)
-        cov_matrix = X_centered.T @ W @ X_centered
-
-        # Hauptrichtung durch Eigenvector zum größten Eigenwert
-        eigenvals, eigenvecs = np.linalg.eigh(cov_matrix)
-        main_direction = eigenvecs[:, -1]  # Eigenvektor zum größten Eigenwert
-
-        # Projiziere alle Punkte auf die Hauptachse durch den Schwerpunkt
-        proj_lengths = (
-            X_centered @ main_direction
-        )  # (n_points,) - Längen der Projektionen
-        projections = (
-            proj_lengths[:, np.newaxis] * main_direction[np.newaxis, :] + centroid
-        )
-
-        # Finde Endpunkte der projizierten Linie
-        min_idx = np.argmin(proj_lengths)
-        max_idx = np.argmax(proj_lengths)
-
-        new_p1 = projections[min_idx]
-        new_p2 = projections[max_idx]
-
-        out_segments.append(np.vstack((new_p1, new_p2)))
+        extracted = extract_segments(collected_points)
+        out_segments = np.vstack([out_segments, extracted])
 
         _export_sample_vectors_to_obj(sample_data, tangential_half_width, normal_length)
 
@@ -433,5 +410,3 @@ def _export_sample_vectors_to_obj(
 
             vertex_count += 6  # 6 Vertices pro Sample-Point
             f.write("\n")
-
-    print(f"Sample-Vektoren exportiert nach: ./sample_vectors.obj")

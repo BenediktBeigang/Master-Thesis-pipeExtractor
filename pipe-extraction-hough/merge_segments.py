@@ -1,5 +1,7 @@
 import numpy as np
 
+from custom_types import Segment3DArray
+
 
 def mean_z_height(segment):
     # Z-Koordinaten
@@ -11,10 +13,10 @@ def mean_z_height(segment):
 
 
 def merge_segments_in_clusters(
-    segments, clusters, gap_threshold, min_length, z_max=False
-):
-    if not segments:
-        return []
+    segments: Segment3DArray, clusters, gap_threshold, min_length, z_max=False
+) -> Segment3DArray:
+    if len(segments) == 0:
+        return np.empty((0, 2, 3), dtype=np.float64)
 
     numpy_segments = np.asarray(segments, dtype=float)
     if (
@@ -24,7 +26,7 @@ def merge_segments_in_clusters(
     ):
         raise ValueError(f"Only 3D segments are supported. {numpy_segments.shape}")
 
-    result_segments = []
+    result_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
 
     # go through every cluster
     for cid, idx in clusters.items():
@@ -105,7 +107,7 @@ def merge_segments_in_clusters(
             p1_3d = np.array([p1_world[0], p1_world[1], seg[2]])
             p2_3d = np.array([p2_world[0], p2_world[1], seg[2]])
 
-            result_segments.append([p1_3d, p2_3d])
+            result_segments = np.vstack([result_segments, np.array([[p1_3d, p2_3d]])])
             # if z_max:
             #     seg_idx = len(result_segments) - 1
             #     print(

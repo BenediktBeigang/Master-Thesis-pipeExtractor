@@ -36,12 +36,15 @@ import os
 import time
 import sys
 
+import numpy as np
+
 from calcSlice import get_z_slices, process_single_slice
 from clustering_hough import (
     cluster_segments,
     cluster_segments_strict,
     subcluster_with_segement_z,
 )
+from custom_types import Segment3DArray
 from export import (
     write_clusters_as_json,
     write_obj_lines,
@@ -132,7 +135,7 @@ def main():
     tasks = [(i, zc, zmin, zmax) for i, (zc, zmin, zmax) in enumerate(slices)]
 
     # Verarbeite alle Slices
-    all_segments = []
+    all_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
     total_processed = 0
 
     prepare_output_directory("./output/")
@@ -158,8 +161,8 @@ def main():
                 repeat(args_dict),  # iterable 2: args_dict für jeden Task
                 chunksize=chunksize,
             ):
-                if segments:
-                    all_segments.extend(segments)
+                if len(segments) > 0:
+                    all_segments = np.vstack([all_segments, segments])
                 total_processed += 1
                 if total_processed % 10 == 0:
                     print(f"Verarbeitet: {total_processed}/{len(slices)} Slices")
@@ -205,7 +208,7 @@ def main():
     # )
 
     # Phase 3: Cluster weiter unterteilen mit Z-Segmentierung
-    phase_3_enabled = True
+    phase_3_enabled = False
     if phase_3_enabled:
         print("Phase 3: Subclustering mit Z-Segmentierung...")
         result_phase3_clustering = subcluster_with_segement_z(

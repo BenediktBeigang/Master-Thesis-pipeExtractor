@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
 import numpy as np
+from custom_types import Segment3DArray
 
 
 def cluster_segments_strict(
@@ -45,7 +46,7 @@ def cluster_segments_strict(
 
 
 def cluster_segments(
-    segments,
+    segments: Segment3DArray,
     eps_euclid,  # Epsilon im (cos2θ, sin2θ, ρ/scale)-Raum
     min_samples,
     rho_scale,  # skaliert ρ relativ zum Winkelteil
@@ -61,7 +62,7 @@ def cluster_segments(
     - rho_scale: Skalierungsfaktor für den rho-Wert.
     - preserve_noise: Ob Rauschsegmente beibehalten werden sollen.
     """
-    if not segments:
+    if len(segments) == 0:
         return dict(X=None, labels=np.array([]), theta=None, rho=None, origin=None)
 
     segs = np.asarray(segments, dtype=float)  # (N, 2, 2) oder (N, 2, 3)

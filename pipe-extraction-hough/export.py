@@ -7,6 +7,8 @@ from skimage.transform import hough_line_peaks
 import laspy
 import json
 
+from custom_types import Segment3DArray
+
 
 def save_slice_las(
     sliced_xyz: np.ndarray,
@@ -305,7 +307,7 @@ def save_slice_images(
 
 
 def write_obj_lines(
-    segments_world: List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
+    segments_world: Segment3DArray,
     out_path: str,
 ) -> None:
     """
@@ -328,7 +330,7 @@ def write_obj_lines(
 
 
 def write_segments_as_geojson(
-    segments,
+    segments: Segment3DArray,
     output_path: str,
     crs_name: str = "unknown",
 ) -> None:
