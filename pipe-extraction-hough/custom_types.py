@@ -21,3 +21,15 @@ Segment3D = Annotated[NDArray[np.floating], "Shape: (2, 3)"]
 # Segment-Array
 Segment2DArray = Annotated[NDArray[np.floating], "Shape: (N, 2, 2)"]
 Segment3DArray = Annotated[NDArray[np.floating], "Shape: (N, 2, 3)"]
+
+
+def Segment3D_Create(start: Point3D, end: Point3D) -> Segment3D:
+    return np.vstack([start, end])
+
+
+def Segment2DArray_Empty():
+    return np.empty((0, 2, 2), dtype=np.float64)
+
+
+def Segment3DArray_Empty():
+    return np.empty((0, 2, 3), dtype=np.float64)

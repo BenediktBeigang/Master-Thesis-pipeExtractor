@@ -36,3 +36,33 @@ def prepare_output_directory(output_dir: str):
 
     print("---------------------------")
     print()
+
+
+def point_to_line_distance(point, line_start, line_end):
+    """
+    Berechnet den kürzesten Abstand eines Punktes zu einer Linie (definiert durch zwei Punkte).
+    """
+    line_vec = line_end - line_start
+    line_length_sq = np.dot(line_vec, line_vec)
+
+    if line_length_sq == 0:
+        # Linie ist ein Punkt
+        return np.linalg.norm(point - line_start)
+
+    # Projektion des Punktes auf die Linie
+    t = np.dot(point - line_start, line_vec) / line_length_sq
+    t = max(0, min(1, t))  # Begrenze t auf [0,1] für Segment
+
+    projection = line_start + t * line_vec
+    return np.linalg.norm(point - projection)
+
+
+def project_point_to_line(point, line_origin, line_dir):
+    """Projiziere `point` auf die parametische Linie (origin + t * dir)."""
+    v = line_dir
+    ap = point - line_origin
+    denom = np.dot(v, v)
+    if denom == 0:
+        return line_origin.copy()
+    t = np.dot(ap, v) / denom
+    return line_origin + t * v

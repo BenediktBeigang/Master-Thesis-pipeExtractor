@@ -38,20 +38,18 @@ import sys
 
 import numpy as np
 
-from calcSlice import get_z_slices, process_single_slice
+from calcSlice import get_z_slices
 from clustering_hough import (
     cluster_segments,
-    cluster_segments_strict,
     subcluster_with_segement_z,
 )
 from custom_types import Segment3DArray
 from export import (
-    write_clusters_as_json,
     write_obj_lines,
     write_clusters_as_obj,
     write_segments_as_geojson,
 )
-from grabPipe import adjust_segments_by_bbox_regression
+from grabPipe import snap_segments_to_point_cloud_data
 from merge_segments import merge_segments_in_clusters
 from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
 from util import load_las, prepare_output_directory
@@ -59,6 +57,7 @@ from util import load_las, prepare_output_directory
 
 def main():
     startTime = time.time()
+    checkpointTime = startTime
 
     ap = argparse.ArgumentParser(
         description="Z-Slice Hough-Liniendetektion aus LAS → OBJ (CloudCompare)"
@@ -140,6 +139,8 @@ def main():
 
     prepare_output_directory("./output/")
 
+    print(f"Phase 1: Process {len(slices)} slices in parallel...")
+
     # robustes Startverfahren wählen:
     # - Linux: 'fork' nutzt COW, spart anfänglich RAM, ist ok wenn du SharedMemory sowieso nutzt
     # - Windows/macOS: 'spawn' ist Standard, SHM funktioniert dort genau für diesen Use-Case
@@ -172,6 +173,11 @@ def main():
         shm.unlink()
         print()
 
+    print(
+        f"Phase 1: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
+    )
+    checkpointTime = time.time()
+
     if len(all_segments) == 0:
         print("Keine Linien in keinem einzigen Slice gefunden.", file=sys.stderr)
         sys.exit(0)
@@ -184,7 +190,7 @@ def main():
     print(f"rho_scale: {rho_scale:.2f}, eps_euclid: {epsilon:.2f}")
 
     # Phase 2: Cluster über alle Slices
-    print("Phase 2: Clustering über alle Segmente...")
+    print("Phase 2: Cluster and merge over all segments...")
     result_phase2_clustering = cluster_segments(
         all_segments,
         eps_euclid=0.5,
@@ -193,74 +199,42 @@ def main():
         preserve_noise=True,
     )
 
-    # result_phase2_clustering = cluster_segments_strict(
-    #     all_segments,
-    #     delta_r_eq=1.0,
-    #     delta_deg=5.0,
-    #     min_samples=3,
-    # )
+    result_phase2_clustering = result_phase2_clustering["clusters"]
 
     # write_clusters_as_obj(
     #     slice_idx=-1,
     #     segments=all_segments,
-    #     clusters=result_phase2_clustering["clusters"],
+    #     clusters=result_phase2_clustering,
     #     output_dir="./output/obj",
-    # )
-
-    # Phase 3: Cluster weiter unterteilen mit Z-Segmentierung
-    phase_3_enabled = False
-    if phase_3_enabled:
-        print("Phase 3: Subclustering mit Z-Segmentierung...")
-        result_phase3_clustering = subcluster_with_segement_z(
-            segments=all_segments,
-            clusters=result_phase2_clustering["clusters"],
-            gap=0.2,
-        )
-    else:
-        result_phase3_clustering = result_phase2_clustering["clusters"]
-
-    write_clusters_as_obj(
-        slice_idx=-1,
-        segments=all_segments,
-        clusters=result_phase3_clustering,
-        output_dir="./output/obj",
-    )
-
-    # write_clusters_as_json(
-    #     slice_idx=-1,
-    #     segments=all_segments,
-    #     clusters=result_phase3_clustering,
-    #     output_dir="./output/json",
     # )
 
     all_segments = merge_segments_in_clusters(
         all_segments,
-        result_phase3_clustering,
+        result_phase2_clustering,
         gap_threshold=2.0,
         min_length=1.0,
         z_max=True,
     )
+
+    print(
+        f"Phase 2: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
+    )
+    checkpointTime = time.time()
 
     write_obj_lines(
         all_segments,
         f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.output}",
     )
 
-    # 1. grab nur mit xy werten
-    # 2. z-position bestimmen
-    # 3. in xy-ebene für jedes teilsegment punkte verbinden und nach brüchen suchen
-    # 4. in z-richtung verbinden und nach brüchen suchen
-    # 5. Brüche aus 3+4 kombinieren und Teilsegmente innerhalb verbinden durch regression
-    phase_4_enabled = True
-    if phase_4_enabled:
-        print("Phase 4: Justierung der Segmente mit Punktwolke...")
-        all_segments = adjust_segments_by_bbox_regression(
+    phase_3_enabled = True
+    if phase_3_enabled:
+        print("Phase 3: Snap segments to original point cloud data...")
+        all_segments = snap_segments_to_point_cloud_data(
             xyz,
             all_segments,
             normal_length=1.0,
             tangential_half_width=0.1,
             min_pts=4,
-            max_shift=None,
             samples_per_meter=1.0,
             min_samples=3,
         )
@@ -269,6 +243,10 @@ def main():
             all_segments,
             f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_grab__{args.output}",
         )
+        print(
+            f"Phase 3: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
+        )
+        checkpointTime = time.time()
 
     write_segments_as_geojson(
         all_segments,
@@ -280,7 +258,7 @@ def main():
     print(f"Gefundene Linien gesamt: {len(all_segments)}")
     print(f"Ausgabedatei: {args.output}")
     endTime = time.time()
-    print(f"Benötigte Zeit: {endTime - startTime:.2f} Sekunden")
+    print(f"Benötigte Zeit insgesamt: {endTime - startTime:.2f} Sekunden")
 
 
 if __name__ == "__main__":

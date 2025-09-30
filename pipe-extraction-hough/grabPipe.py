@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Postprocessing: Endpunkte von Segmenten (2x3) per orientierter BBox snappen.
-Eingabe/Output sind IDENTISCH zum merge_segments_in_clusters-Format:
-    List[np.ndarray] mit je shape (2,3): [[x1,y1,z1],[x2,y2,z2]]
-"""
 
 from __future__ import annotations
 import math
 import numpy as np
 from scipy.stats import qmc
 from scipy.spatial import KDTree
-from custom_types import Segment3DArray
+from custom_types import Point2D, Point3D, Segment3DArray
 from samplePointMerge import extract_segments
 
 
@@ -20,10 +15,28 @@ def _unit(v: np.ndarray) -> np.ndarray:
     return v / n if n > 0 else v
 
 
-def _compute_quantized_z(z_values: np.ndarray, bucket_size: float = 0.01) -> float:
+def _compute_quantized_z(z_values: np.ndarray, bucket_size: float) -> float:
     """
-    Quantisiert Z-Werte in Buckets und gibt den Bucket-Mittelpunkt zurück,
-    bei dem erstmals der Schwellwert (Mittelwert der Bucket-Häufigkeiten) überschritten wird.
+    Extracts the the highest z-value where points can be found and ignoring outliers.
+    With it the top edge of the pipe can be found.
+
+    ## How it works
+    This function creates a histogram of Z-values using the specified bucket size,
+    calculates a threshold as half the mean of all bucket counts, and returns
+    the center of the last (highest) bucket that exceeds this threshold.
+
+    Parameters
+    ----------
+    z_values : np.ndarray
+        Array of Z-coordinate values to be quantized
+    bucket_size : float
+        Size of each bucket for the histogram binning
+
+    Returns
+    -------
+    float
+        The center point of the selected bucket. Returns 0.0 if no Z-values
+        are provided, or the mean Z-value if only one bucket is needed.
     """
     if len(z_values) == 0:
         return 0.0
@@ -78,31 +91,71 @@ def _compute_quantized_z(z_values: np.ndarray, bucket_size: float = 0.01) -> flo
     return bucket_center
 
 
-# Änderungen:
-# 3d Punktwolke übergeben und an betreffenden stellen die 2d XY Koordinaten extrahieren
-# Am Ende mit den indizes der bbox punkte, die z-Werte der gefundenen Punkte extrahieren
-# quantisieren mit buckets der größe 0.05, mittelwert bestimmen und als schwellwert nehmen
-# z-Wert für resultierender Punkt ist bucket bei dem das erste mal der schwellwert überschritten wird
 def _bbox_centroid_for_endpoint(
     cloud_2D: np.ndarray,
     cloud_3D: np.ndarray,
-    endpoint_xy: np.ndarray,
+    sample_point_xy: Point2D,
     t_hat: np.ndarray,
     n_hat: np.ndarray,
     tangential_half_width: float,
     normal_length: float,
     min_pts: int,
-    poisson_radius: float | None = None,
-    poisson_seed: int = 42,
-):
+    poisson_radius: float,
+    quantization_precision: float,
+) -> tuple[Point2D, float, int]:
     """
-    Lokales Koordsystem am Endpunkt:
-      x: Segmentrichtung (t_hat)
-      y: Normalenrichtung (n_hat)
-    Auswahl-Box: |x| <= w  UND  |y| <= L (beide Richtungen gleichzeitig)
-    Mit optionalem Poisson-Disk-Subsampling in der lokalen Box.
+    Calculate the centroid of points within an oriented bounding box around a segment endpoint.
+
+    ## How it works
+    This function creates a local coordinate system at the given endpoint and selects points that fall within a rectangular bounding box.
+    The selected points are then subsampled using Poisson disk sampling and without the z-value to ensure uniform distribution.
+    The centroid of the selected points is calculated in 2D (x, y).
+    Then the z-value is determined by quantizing the z-values of the selected points.
+
+    Local Coordinate System:
+        - x-axis: Segment direction (t_hat)
+        - y-axis: Normal direction (n_hat)
+        - Bounding box: |x| <= tangential_half_width AND |y| <= normal_length
+
+    Parameters
+    ----------
+    cloud_2D : np.ndarray, shape (N, 2)
+        2D point cloud coordinates (x, y) in world space
+    cloud_3D : np.ndarray, shape (N, 3)
+        3D point cloud coordinates (x, y, z) in world space
+    endpoint_xy : np.ndarray, shape (2,)
+        2D coordinates of the segment endpoint around which to create the bounding box
+    t_hat : np.ndarray, shape (2,)
+        Unit vector in segment direction (tangent direction)
+    n_hat : np.ndarray, shape (2,)
+        Unit vector perpendicular to segment (normal direction)
+    tangential_half_width : float
+        Half-width of the bounding box in tangential direction (meters)
+    normal_length : float
+        Full length of the bounding box in normal direction (meters)
+    min_pts : int
+        Minimum number of points required in the bounding box
+    poisson_radius : float
+        Radius for Poisson disk sampling (must be > 0)
+    quantization_precision : float
+        Precision for quantizing z-values (meters)
+
+    Returns
+    -------
+    tuple[np.ndarray, float, int]
+        - selected_xy : Point2D, shape (2,)
+            2D centroid coordinates of the selected points
+        - selected_z : float
+            Quantized z-coordinate of the selected points
+        - point_count : int
+            Number of points used for centroid calculation
+
+    Raises
+    ------
+    ValueError
+        If poisson_radius <= 0
     """
-    D = cloud_2D - endpoint_xy[None, :]  # (N,2)
+    D = cloud_2D - sample_point_xy[None, :]  # (N,2)
     x_local = D @ t_hat
     y_local = D @ n_hat
 
@@ -112,14 +165,10 @@ def _bbox_centroid_for_endpoint(
     )
     idx = np.nonzero(mask)[0]
     if idx.size < min_pts:
-        return endpoint_xy, 0.0, 0
+        return sample_point_xy, 0.0, 0
 
-    # Ohne Subsampling: wie gehabt Mittelwert über alle Box-Punkte
-    if poisson_radius is None or poisson_radius <= 0:
-        selected_xy = cloud_2D[idx].mean(axis=0)
-        z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(z_values)
-        return selected_xy, selected_z, idx.size
+    if poisson_radius <= 0:
+        raise ValueError("poisson_radius must be > 0")
 
     # --- Poisson-Disk-Subsampling im lokalen Rechteck [-w, w] x [-L, L] ---
     # 1) Generiere Poisson-Disk-Samples im lokalen Domain-Rechteck
@@ -130,7 +179,7 @@ def _bbox_centroid_for_endpoint(
         radius=float(poisson_radius),
         l_bounds=np.array([-w, -L]),
         u_bounds=np.array([+w, +L]),
-        rng=int(poisson_seed),
+        rng=int(42),
     )
     # fill_space füllt bis keine Kandidaten mehr passen (für d=2 meist flott)
     S = eng.fill_space()  # (M,2) lokale Samplepunkte
@@ -139,7 +188,7 @@ def _bbox_centroid_for_endpoint(
     if S.size == 0:
         selected_xy = cloud_2D[idx].mean(axis=0)
         z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(z_values)
+        selected_z = _compute_quantized_z(z_values, quantization_precision)
         return selected_xy, selected_z, idx.size
 
     # 2) Mappe Samples auf die nächstgelegenen Originalpunkte in der Box (lokal!)
@@ -152,85 +201,71 @@ def _bbox_centroid_for_endpoint(
         # Wenn zu wenige Punkte übrig bleiben, fallback auf alle Box-Punkte
         selected_xy = cloud_2D[idx].mean(axis=0)
         z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(z_values)
+        selected_z = _compute_quantized_z(z_values, quantization_precision)
         return selected_xy, selected_z, idx.size
 
     # 3) Schwerpunkt in Weltkoordinaten über der subsampleten Teilmenge
     idx_sub = idx[nn_idx]
     selected_xy = cloud_2D[idx_sub].mean(axis=0)
     z_values = cloud_3D[idx_sub, 2]
-    selected_z = _compute_quantized_z(z_values)
+    selected_z = _compute_quantized_z(z_values, quantization_precision)
     return selected_xy, selected_z, idx_sub.size
 
 
-# def extract_segments(points_3D: np.ndarray) -> list:
-#     # 1. iteriere durch alle punkte
-#     # a. erstelle neuen bucket wenn keine vorhanden mit dem ersten punkt
-#     # b. wenn das delta-z zum nächsten punkt um mehr als 0.3 abweicht vom avg delta-z des buckets, beende den bucket und erstelle eine neue mit dem punkt
-
-#     # 2. Für jeden bucket:
-#     # a. itereriere durch alle punkte und berechne den winkel zum nächsten punkt
-#     # b. clustere auf den winkeln mit toleranz von 10 grad
-#     # d. am ende wähle das cluster mit der längsten Gesammtlänge aus
-#     # e. Nutze approcimate_polygon von skimage
-#     # f. finde für jeden punkt mittels der ursprünglichen 3d-punkte und gib füge alle segmente der ergebnisliste hinzu
-
-#     # coords: Nx2 numpy array
-#     approx = approximate_polygon(points_3D[:, :2], tolerance=1.0)
-#     return []
-
-
-def adjust_segments_by_bbox_regression(
+def snap_segments_to_point_cloud_data(
     xyz: np.ndarray,
-    segments_2x3: Segment3DArray,
-    *,
-    normal_length: float = 1.0,  # Länge entlang Normalenrichtung (m)
-    tangential_half_width: float = 0.25,  # halbe Breite entlang Segment (m)
+    segments: Segment3DArray,
+    normal_length: float = 1.0,
+    tangential_half_width: float = 0.25,
     min_pts: int = 4,
-    max_shift: float | None = None,  # Begrenzung des Shifts (z.B. = normal_length)
-    samples_per_meter: float = 1.0,  # Anzahl Zwischenpunkte pro Meter Segmentlänge
-    min_samples: int = 3,  # Mindestanzahl Samples (inkl. Endpunkte)
+    samples_per_meter: float = 1.0,
+    min_samples: int = 3,
+    poisson_radius: float = 0.02,
+    quantization_precision: float = 0.01,
 ) -> Segment3DArray:
     """
+    Uses the approximated segments that are close to the real pipes in the pointcloud and snaps to them.
+
+    ## How it works
+    The function samples points along the segment, creating an oriented bounding box around each sample point
+    and calculating the centroid of the points within the box.
+    The new snapped segment is then created from these centroids and RANSAC.
+    The length of the original segment is preserved, by projecting the endpoints of the sampling chain onto the result line by RANSAC.
+
     Parameters
     ----------
-    xyz : np.ndarray (N,3)
-    segments_2x3 : list of np.ndarray, jedes (2,3)
-    samples_per_meter : float
-        Anzahl der Sampling-Punkte pro Meter Segmentlänge
-    min_samples : int
-        Mindestanzahl von Sampling-Punkten entlang des Segments
+    xyz : np.ndarray, shape (N, 3)
+        Point cloud data (x, y, z) in world space
+    segments_2x3 : Segment3DArray, shape (M, 2, 3)
+        List of segments to be snapped, each defined by two endpoints (x1, y1, z1) and (x2, y2, z2)
+    normal_length : float, optional
+        Length of the bounding box in normal direction (meters), by default 1.0
+    tangential_half_width : float, optional
+        Half-width of the bounding box in tangential direction (meters), by default 0.25
+    min_pts : int, optional
+        Minimum number of points required in the bounding box, by default 4
+    samples_per_meter : float, optional
+        Number of sample points per meter of segment length, by default 1.0
+    min_samples : int, optional
+        Minimum number of sample points along the segment, by default 3
+    quantization_precision : float, optional
+        Precision for quantizing z-values (meters), by default 0.01
+
     Returns
     -------
-    list of np.ndarray, jedes (2,3)  # exakt wie merge_segments_in_clusters
+    Segment3DArray, shape (N, 2, 3)
     """
     if not isinstance(xyz, np.ndarray) or xyz.shape[1] < 2:
-        raise ValueError("xyz muss [N,3] sein.")
+        raise ValueError("xyz has to be [N,3].")
     XY = xyz[:, :2].astype(float, copy=False)
-
-    # print("Erstelle 2D KDTree...")
-    # XY3D = np.c_[XY, np.zeros(len(XY))]
-
-    # print("Erstelle Open3D KDTree mit Voxel-Downsampling...")
-    # # Open3D Punktwolke
-    # pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(XY3D))
-    # print(f"Originalpunkte: {len(pcd.points)}")
-    # # Voxel-Downsampling in 2D (Voxelgröße z.B. 0.02)
-    # pcd_down = pcd.voxel_down_sample(voxel_size=0.02)
-    # print(f"Downsampled Punkte: {len(pcd_down.points)}")
-    # # Downsampled Koordinaten zurückholen
-    # XY_down = np.asarray(pcd_down.points)[:, :2]
-    # print(f"XY Downshape: {XY_down.shape}")
-    # kdtree = KDTree(XY_down)
 
     kdtree = KDTree(XY)
 
-    print("Justiere Segmente...")
     sample_data = []
     out_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
-    for index, seg in enumerate(segments_2x3):
+    for index, seg in enumerate(segments):
         if index % 5 == 0:
-            print(f"Segment {index}/{len(segments_2x3)}")
+            print(f"Segment {index}/{len(segments)}")
 
         seg = np.asarray(seg, dtype=float)
         if seg.shape != (2, 3):
@@ -265,8 +300,8 @@ def adjust_segments_by_bbox_regression(
 
         for t in t_values:
             # Interpolierter Punkt auf dem Segment
-            sample_point_3d = p1 + t * segment_vec
-            sample_point_xy = sample_point_3d[:2]
+            sample_point_xyz: Point3D = p1 + t * segment_vec
+            sample_point_xy: Point2D = sample_point_xyz[:2]
 
             # Nur relevante Punkte per KDTree
             candidate_indices = kdtree.query_ball_point(sample_point_xy, search_radius)
@@ -286,24 +321,16 @@ def adjust_segments_by_bbox_regression(
                 tangential_half_width,
                 normal_length,
                 min_pts,
-                poisson_radius=0.02,
+                poisson_radius,
+                quantization_precision=quantization_precision,
             )
 
             # Nur verwenden wenn genügend Punkte gefunden
             if n_pts > 0:
-                # Optional: Shift begrenzen
-                if max_shift is not None:
-                    d = np.linalg.norm(grabed_xy - sample_point_xy)
-                    if d > max_shift:
-                        grabed_xy = sample_point_xy + (grabed_xy - sample_point_xy) * (
-                            max_shift / d
-                        )
-
                 # 3D-Punkt: XY aus BBox, Z interpoliert
                 c_3d = np.array([grabed_xy[0], grabed_xy[1], grabed_z])
                 collected_points.append(c_3d)
                 collected_weights.append(n_pts)  # Gewichtung nach Anzahl Punkte
-
                 sample_data.append(
                     {
                         "t_hat": t_hat.copy(),
