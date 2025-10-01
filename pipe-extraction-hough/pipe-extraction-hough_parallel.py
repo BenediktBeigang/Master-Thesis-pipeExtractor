@@ -104,6 +104,8 @@ def main():
 
     print(f"Punktwolke geladen: {xyz.shape[0]} Punkte")
 
+    pointcloud_name = os.path.basename(args.input)
+
     # Berechne alle Z-Slices
     slices = get_z_slices(xyz, args.thickness)
 
@@ -219,7 +221,7 @@ def main():
 
     write_obj_lines(
         all_segments,
-        f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.output}",
+        f"{pointcloud_name}_approx.obj",
     )
 
     phase_3_enabled = True
@@ -237,7 +239,7 @@ def main():
 
         write_obj_lines(
             all_segments,
-            f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_grab__{args.output}",
+            f"{pointcloud_name}_snapped.obj",
         )
         print(
             f"Phase 3: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
@@ -246,7 +248,7 @@ def main():
 
     write_segments_as_geojson(
         all_segments,
-        f"{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.output.replace('.obj','.geojson')}",
+        f"{pointcloud_name}_pipes.geojson",
     )
 
     print(f"\nFertig!")

@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.cluster import DBSCAN
 from custom_types import (
     ListOfPoint3DArrays,
     Point2D,
@@ -14,10 +15,78 @@ from skimage.measure import LineModelND, ransac
 from util import project_point_to_line
 
 
+# def _buckets_by_dbscan_z(
+#     points_3D_chain: Point3DArray,
+#     eps: float = 0.2,
+#     min_samples: int = 2,
+# ) -> ListOfPoint3DArrays:
+#     """
+#     Groups a chain of 3D points into buckets using DBSCAN clustering on z-coordinates.
+
+#     ## How it works
+#     This function segments a sequence of 3D points by clustering their z-coordinates using DBSCAN.
+#     Each cluster becomes one bucket, regardless of sequence continuity. Clusters with too few points are discarded.
+
+#     Parameters
+#     -----------
+#     points_3D_chain : Point3DArray, shape (N, 3)
+#         Array of shape (N, 3) containing ordered 3D points (x, y, z).
+#     eps : float, default=0.2
+#         Maximum distance between two samples for one to be considered
+#         in the neighborhood of the other for DBSCAN clustering.
+#     min_samples : int, default=2
+#         Minimum number of samples in a neighborhood for a point to be
+#         considered as a core point in DBSCAN.
+
+#     Returns
+#     --------
+#     ListOfPoint3DArrays
+#         List of numpy arrays, each containing points from one DBSCAN cluster.
+#         Points maintain their original order within each bucket.
+#     """
+#     if points_3D_chain is None or len(points_3D_chain) < 2:
+#         return []
+
+#     # Extrahiere z-Koordinaten für Clustering
+#     z_coords = points_3D_chain[:, 2].reshape(-1, 1)
+
+#     # DBSCAN Clustering auf z-Koordinaten
+#     clustering = DBSCAN(eps=eps, min_samples=min_samples)
+#     cluster_labels = clustering.fit_predict(z_coords)
+
+#     # Sammle Indizes für jeden Cluster
+#     label_to_indices = {}
+#     for i, label in enumerate(cluster_labels):
+#         if label == -1:  # Noise points ignorieren
+#             continue
+#         if label not in label_to_indices:
+#             label_to_indices[label] = []
+#         label_to_indices[label].append(i)
+
+#     # Erstelle Buckets - ein Cluster = ein Bucket
+#     buckets = []
+#     for label, indices in label_to_indices.items():
+#         if len(indices) > 2:  # Cluster mit <= 2 Punkten rausfliegen
+#             # Behalte ursprüngliche Reihenfolge bei
+#             indices.sort()
+#             bucket_points = points_3D_chain[indices]
+#             buckets.append(bucket_points)
+
+#     # Debug-Output
+#     if len(buckets) > 1:
+#         print(f"{len(buckets)} DBSCAN Buckets (eps={eps}, min_samples={min_samples})")
+#         for bi, b in enumerate(buckets):
+#             z_range = b[:, 2].max() - b[:, 2].min()
+#             print(f"  Bucket {bi}: {len(b)} Punkte, z-Range: {z_range:.3f}")
+
+#     return buckets
+
+
 def _buckets_by_delta_z(
     points_3D_chain: Point3DArray,
     deltaZ_threshold: float,
     outlier_z_threshold: float,
+    min_points_per_bucket: int = 2,
 ) -> ListOfPoint3DArrays:
     """
     Groups a chain of 3D points into buckets based on z-coordinate differences.
@@ -113,8 +182,20 @@ def _buckets_by_delta_z(
     if len(current) >= 2:
         buckets.append(np.array(current))
 
+    multibuckets = len(buckets) > 1
+    if multibuckets:
+        print(f"{len(buckets)} Buckets")
+        for bi, b in enumerate(buckets):
+            print(f"{len(b)}")
+
     # Mindestens 2 Punkte pro Bucket
-    buckets = [b for b in buckets if len(b) >= 2]
+    buckets = [b for b in buckets if len(b) >= min_points_per_bucket]
+
+    if multibuckets:
+        print(
+            f"{len(buckets)} Buckets nach min_points_per_bucket={min_points_per_bucket}"
+        )
+
     return buckets
 
 
@@ -189,8 +270,8 @@ def fit_ransac_line_and_project_endpoints(
 
 def extract_segments(
     points_3D: Point3DArray,
-    dz_threshold: float = 0.3,
-    outlier_z_threshold: float = 0.1,
+    dz_threshold: float = 0.2,
+    outlier_z_threshold: float = 0.2,
     ransac_residual_threshold: float = 0.05,
 ) -> Segment3DArray:
     """
@@ -236,6 +317,12 @@ def extract_segments(
         deltaZ_threshold=dz_threshold,
         outlier_z_threshold=outlier_z_threshold,
     )
+
+    # buckets = _buckets_by_dbscan_z(
+    #     points_3D,
+    #     eps=0.2,
+    #     min_samples=2,
+    # )
 
     segments_out: Segment3DArray = Segment3DArray_Empty()
     for sub_chain in buckets:
