@@ -10,6 +10,11 @@ Point3D = Annotated[NDArray[np.floating], "Shape: (3,)"]
 Point2DArray = Annotated[NDArray[np.floating], "Shape: (2, N)"]
 Point3DArray = Annotated[NDArray[np.floating], "Shape: (3, N)"]
 
+
+def Point3DArray_One(point: Point3D) -> Point3DArray:
+    return point.reshape((1, 3))
+
+
 # Bucket
 ListOfPoint2DArrays = Annotated[list[Point2DArray], "Each element shape: (M_i, 2)"]
 ListOfPoint3DArrays = Annotated[list[Point3DArray], "Each element shape: (M_i, 3)"]
@@ -33,3 +38,7 @@ def Segment2DArray_Empty():
 
 def Segment3DArray_Empty():
     return np.empty((0, 2, 3), dtype=np.float64)
+
+
+def Segment3DArray_One(segment: Segment3D) -> Segment3DArray:
+    return segment.reshape((1, 2, 3))

@@ -383,3 +383,85 @@ def write_segments_as_geojson(
     # GeoJSON speichern
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(geojson_data, f, indent=2, ensure_ascii=False)
+
+
+def export_sample_vectors_to_obj(
+    sample_data: list, tangential_half_width: float, normal_length: float
+):
+    """
+    Exportiert Sample-Point-Vektoren in eine OBJ-Datei.
+
+    Für jeden Sample-Point werden exportiert:
+    - Tangentialvektor (t_hat) skaliert mit tangential_half_width
+    - Normalenvektor (n_hat) skaliert mit normal_length
+    - Resultierender Punkt (c_xy) als Punkt
+    """
+    with open("./sample_vectors.obj", "w") as f:
+        f.write("# Sample Point Vectors Export\n")
+        f.write(f"# Tangential half width: {tangential_half_width}\n")
+        f.write(f"# Normal length: {normal_length}\n")
+        f.write(f"# Total sample points: {len(sample_data)}\n\n")
+
+        vertex_count = 0
+
+        for i, data in enumerate(sample_data):
+            t_hat = data["t_hat"]
+            n_hat = data["n_hat"]
+            c_xy = data["c_xy"]
+            sample_xy = data["sample_point_xy"]
+            z = data["z"]
+
+            f.write(f"# Sample point {i}\n")
+
+            # Startpunkt (Sample-Point-Position)
+            start_3d = [sample_xy[0], sample_xy[1], z]
+            f.write(f"v {start_3d[0]:.6f} {start_3d[1]:.6f} {start_3d[2]:.6f}\n")
+
+            # Endpunkt des Tangentialvektors (beide Richtungen)
+            t_end1_3d = [
+                start_3d[0] + t_hat[0] * tangential_half_width,
+                start_3d[1] + t_hat[1] * tangential_half_width,
+                z,
+            ]
+            t_end2_3d = [
+                start_3d[0] - t_hat[0] * tangential_half_width,
+                start_3d[1] - t_hat[1] * tangential_half_width,
+                z,
+            ]
+            f.write(f"v {t_end1_3d[0]:.6f} {t_end1_3d[1]:.6f} {t_end1_3d[2]:.6f}\n")
+            f.write(f"v {t_end2_3d[0]:.6f} {t_end2_3d[1]:.6f} {t_end2_3d[2]:.6f}\n")
+
+            # Endpunkt des Normalenvektors (beide Richtungen)
+            n_end1_3d = [
+                start_3d[0] + n_hat[0] * normal_length,
+                start_3d[1] + n_hat[1] * normal_length,
+                z,
+            ]
+            n_end2_3d = [
+                start_3d[0] - n_hat[0] * normal_length,
+                start_3d[1] - n_hat[1] * normal_length,
+                z,
+            ]
+            f.write(f"v {n_end1_3d[0]:.6f} {n_end1_3d[1]:.6f} {n_end1_3d[2]:.6f}\n")
+            f.write(f"v {n_end2_3d[0]:.6f} {n_end2_3d[1]:.6f} {n_end2_3d[2]:.6f}\n")
+
+            # Resultierender Punkt (c_xy)
+            result_3d = [c_xy[0], c_xy[1], z]
+            f.write(f"v {result_3d[0]:.6f} {result_3d[1]:.6f} {result_3d[2]:.6f}\n")
+
+            # Linien definieren (OBJ verwendet 1-basierte Indizes)
+            base_idx = vertex_count + 1
+
+            # Tangentialvektor-Linien (Kreuz)
+            f.write(f"l {base_idx} {base_idx + 1}\n")  # Start -> t_end1
+            f.write(f"l {base_idx} {base_idx + 2}\n")  # Start -> t_end2
+
+            # Normalenvektor-Linien (Kreuz)
+            f.write(f"l {base_idx} {base_idx + 3}\n")  # Start -> n_end1
+            f.write(f"l {base_idx} {base_idx + 4}\n")  # Start -> n_end2
+
+            # Linie zum resultierenden Punkt
+            f.write(f"l {base_idx} {base_idx + 5}\n")  # Start -> result
+
+            vertex_count += 6  # 6 Vertices pro Sample-Point
+            f.write("\n")

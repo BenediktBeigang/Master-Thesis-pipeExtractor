@@ -6,7 +6,15 @@ import math
 import numpy as np
 from scipy.stats import qmc
 from scipy.spatial import KDTree
-from custom_types import Point2D, Point3D, Segment3DArray
+from custom_types import (
+    Point2D,
+    Point3D,
+    Segment3D,
+    Segment3DArray,
+    Segment3DArray_Empty,
+    Segment3DArray_One,
+)
+from export import export_sample_vectors_to_obj
 from samplePointMerge import extract_segments
 
 
@@ -262,178 +270,137 @@ def snap_segments_to_point_cloud_data(
     kdtree = KDTree(XY)
 
     sample_data = []
-    out_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
+    out_segments: Segment3DArray = Segment3DArray_Empty()
     for index, seg in enumerate(segments):
         if index % 5 == 0:
             print(f"Segment {index}/{len(segments)}")
 
-        seg = np.asarray(seg, dtype=float)
-        if seg.shape != (2, 3):
-            raise ValueError(f"Segment hat Form {seg.shape}, erwartet (2,3).")
+        snapped_segments, seg_sample_data = process_single_segment(
+            seg,
+            min_samples,
+            samples_per_meter,
+            tangential_half_width,
+            normal_length,
+            kdtree,
+            xyz,
+            XY,
+            min_pts,
+            poisson_radius,
+            quantization_precision,
+        )
+        out_segments = np.vstack([out_segments, snapped_segments])
+        sample_data.extend(seg_sample_data)
 
-        p1 = seg[0].copy()
-        p2 = seg[1].copy()
-        p1_xy, p2_xy = p1[:2], p2[:2]
-
-        # Segmentlänge und Richtung
-        segment_vec = p2 - p1
-        segment_length = np.linalg.norm(segment_vec)
-
-        if segment_length < 1e-6:
-            out_segments = np.vstack([out_segments, seg])  # degeneriert
-            continue
-
-        # Anzahl Sample-Punkte basierend auf Segmentlänge
-        num_samples = max(min_samples, int(np.ceil(segment_length * samples_per_meter)))
-
-        # Tangente/Normale aus XY
-        t_hat = _unit(p2_xy - p1_xy)
-        n_hat = np.array([-t_hat[1], t_hat[0]])
-
-        # Sample-Punkte entlang des Segments generieren (inkl. Endpunkte)
-        t_values = np.linspace(0, 1, num_samples)
-        collected_points = []
-        collected_weights = []
-
-        # Maximale Suchradius für alle Sample-Punkte dieses Segments
-        search_radius = math.sqrt(tangential_half_width**2 + normal_length**2)
-
-        for t in t_values:
-            # Interpolierter Punkt auf dem Segment
-            sample_point_xyz: Point3D = p1 + t * segment_vec
-            sample_point_xy: Point2D = sample_point_xyz[:2]
-
-            # Nur relevante Punkte per KDTree
-            candidate_indices = kdtree.query_ball_point(sample_point_xy, search_radius)
-            if len(candidate_indices) < min_pts:
-                continue
-
-            XY_candidates = XY[candidate_indices]
-            xyz_candidates = xyz[candidate_indices]
-
-            # BBox-Centroid für diesen Sample-Punkt
-            grabed_xy, grabed_z, n_pts = _bbox_centroid_for_endpoint(
-                XY_candidates,
-                xyz_candidates,
-                sample_point_xy,
-                t_hat,
-                n_hat,
-                tangential_half_width,
-                normal_length,
-                min_pts,
-                poisson_radius,
-                quantization_precision=quantization_precision,
-            )
-
-            # Nur verwenden wenn genügend Punkte gefunden
-            if n_pts > 0:
-                # 3D-Punkt: XY aus BBox, Z interpoliert
-                c_3d = np.array([grabed_xy[0], grabed_xy[1], grabed_z])
-                collected_points.append(c_3d)
-                collected_weights.append(n_pts)  # Gewichtung nach Anzahl Punkte
-                sample_data.append(
-                    {
-                        "t_hat": t_hat.copy(),
-                        "n_hat": n_hat.copy(),
-                        "c_xy": grabed_xy.copy(),
-                        "sample_point_xy": sample_point_xy.copy(),
-                        "z": grabed_z,
-                    }
-                )
-
-        # Fallback: Wenn keine gültigen Punkte gefunden, ursprüngliches Segment behalten
-        if len(collected_points) < 2:
-            seg_reshaped = seg.astype(float).reshape(1, 2, 3)
-            out_segments = np.vstack([out_segments, seg_reshaped])
-            continue
-
-        collected_points = np.array(collected_points)
-
-        extracted = extract_segments(collected_points)
-        out_segments = np.vstack([out_segments, extracted])
-
-        _export_sample_vectors_to_obj(sample_data, tangential_half_width, normal_length)
-
+    export_sample_vectors_to_obj(sample_data, tangential_half_width, normal_length)
     return out_segments
 
 
-def _export_sample_vectors_to_obj(
-    sample_data: list, tangential_half_width: float, normal_length: float
-):
-    """
-    Exportiert Sample-Point-Vektoren in eine OBJ-Datei.
+def process_single_segment(
+    approximated_segment: Segment3D,
+    min_samples: int,
+    samples_per_meter: float,
+    tangential_half_width: float,
+    normal_length: float,
+    kdtree: KDTree,
+    xyz: np.ndarray,
+    XY: np.ndarray,
+    min_pts: int,
+    poisson_radius: float,
+    quantization_precision: float,
+) -> tuple[Segment3DArray, list[dict]]:
+    if approximated_segment.shape != (2, 3):
+        raise ValueError(
+            f"Segment hat Form {approximated_segment.shape}, erwartet (2,3)."
+        )
 
-    Für jeden Sample-Point werden exportiert:
-    - Tangentialvektor (t_hat) skaliert mit tangential_half_width
-    - Normalenvektor (n_hat) skaliert mit normal_length
-    - Resultierender Punkt (c_xy) als Punkt
-    """
-    with open("./sample_vectors.obj", "w") as f:
-        f.write("# Sample Point Vectors Export\n")
-        f.write(f"# Tangential half width: {tangential_half_width}\n")
-        f.write(f"# Normal length: {normal_length}\n")
-        f.write(f"# Total sample points: {len(sample_data)}\n\n")
+    p1 = approximated_segment[0].copy()
+    p2 = approximated_segment[1].copy()
+    p1_xy, p2_xy = p1[:2], p2[:2]
 
-        vertex_count = 0
+    # Segmentlänge und Richtung
+    segment_vec = p2 - p1
+    segment_length = np.linalg.norm(segment_vec)
 
-        for i, data in enumerate(sample_data):
-            t_hat = data["t_hat"]
-            n_hat = data["n_hat"]
-            c_xy = data["c_xy"]
-            sample_xy = data["sample_point_xy"]
-            z = data["z"]
+    # Initialize
+    sample_data = []
 
-            f.write(f"# Sample point {i}\n")
+    # Ignore tiny segment
+    if segment_length < 1e-6:
+        return (
+            np.vstack(
+                [Segment3DArray_Empty(), Segment3DArray_One(approximated_segment)]
+            ),
+            sample_data,
+        )
 
-            # Startpunkt (Sample-Point-Position)
-            start_3d = [sample_xy[0], sample_xy[1], z]
-            f.write(f"v {start_3d[0]:.6f} {start_3d[1]:.6f} {start_3d[2]:.6f}\n")
+    # Anzahl Sample-Punkte basierend auf Segmentlänge
+    num_samples = max(min_samples, int(np.ceil(segment_length * samples_per_meter)))
 
-            # Endpunkt des Tangentialvektors (beide Richtungen)
-            t_end1_3d = [
-                start_3d[0] + t_hat[0] * tangential_half_width,
-                start_3d[1] + t_hat[1] * tangential_half_width,
-                z,
-            ]
-            t_end2_3d = [
-                start_3d[0] - t_hat[0] * tangential_half_width,
-                start_3d[1] - t_hat[1] * tangential_half_width,
-                z,
-            ]
-            f.write(f"v {t_end1_3d[0]:.6f} {t_end1_3d[1]:.6f} {t_end1_3d[2]:.6f}\n")
-            f.write(f"v {t_end2_3d[0]:.6f} {t_end2_3d[1]:.6f} {t_end2_3d[2]:.6f}\n")
+    # Tangente/Normale aus XY
+    t_hat = _unit(p2_xy - p1_xy)
+    n_hat = np.array([-t_hat[1], t_hat[0]])
 
-            # Endpunkt des Normalenvektors (beide Richtungen)
-            n_end1_3d = [
-                start_3d[0] + n_hat[0] * normal_length,
-                start_3d[1] + n_hat[1] * normal_length,
-                z,
-            ]
-            n_end2_3d = [
-                start_3d[0] - n_hat[0] * normal_length,
-                start_3d[1] - n_hat[1] * normal_length,
-                z,
-            ]
-            f.write(f"v {n_end1_3d[0]:.6f} {n_end1_3d[1]:.6f} {n_end1_3d[2]:.6f}\n")
-            f.write(f"v {n_end2_3d[0]:.6f} {n_end2_3d[1]:.6f} {n_end2_3d[2]:.6f}\n")
+    # Sample-Punkte entlang des Segments generieren (inkl. Endpunkte)
+    t_values = np.linspace(0, 1, num_samples)
+    snapped_points_chain = []
+    collected_weights = []
 
-            # Resultierender Punkt (c_xy)
-            result_3d = [c_xy[0], c_xy[1], z]
-            f.write(f"v {result_3d[0]:.6f} {result_3d[1]:.6f} {result_3d[2]:.6f}\n")
+    # Maximale Suchradius für alle Sample-Punkte dieses Segments
+    search_radius = math.sqrt(tangential_half_width**2 + normal_length**2)
 
-            # Linien definieren (OBJ verwendet 1-basierte Indizes)
-            base_idx = vertex_count + 1
+    for t in t_values:
+        # Interpolierter Punkt auf dem Segment
+        sample_point_xyz: Point3D = p1 + t * segment_vec
+        sample_point_xy: Point2D = sample_point_xyz[:2]
 
-            # Tangentialvektor-Linien (Kreuz)
-            f.write(f"l {base_idx} {base_idx + 1}\n")  # Start -> t_end1
-            f.write(f"l {base_idx} {base_idx + 2}\n")  # Start -> t_end2
+        # Nur relevante Punkte per KDTree
+        candidate_indices = kdtree.query_ball_point(sample_point_xy, search_radius)
+        if len(candidate_indices) < min_pts:
+            continue
 
-            # Normalenvektor-Linien (Kreuz)
-            f.write(f"l {base_idx} {base_idx + 3}\n")  # Start -> n_end1
-            f.write(f"l {base_idx} {base_idx + 4}\n")  # Start -> n_end2
+        XY_candidates = XY[candidate_indices]
+        xyz_candidates = xyz[candidate_indices]
 
-            # Linie zum resultierenden Punkt
-            f.write(f"l {base_idx} {base_idx + 5}\n")  # Start -> result
+        # BBox-Centroid für diesen Sample-Punkt
+        grabed_xy, grabed_z, n_pts = _bbox_centroid_for_endpoint(
+            XY_candidates,
+            xyz_candidates,
+            sample_point_xy,
+            t_hat,
+            n_hat,
+            tangential_half_width,
+            normal_length,
+            min_pts,
+            poisson_radius,
+            quantization_precision=quantization_precision,
+        )
 
-            vertex_count += 6  # 6 Vertices pro Sample-Point
-            f.write("\n")
+        # Nur verwenden wenn genügend Punkte gefunden
+        if n_pts > 0:
+            # 3D-Punkt: XY aus BBox, Z interpoliert
+            c_3d: Point3D = np.array([grabed_xy[0], grabed_xy[1], grabed_z])
+
+            snapped_points_chain.append(c_3d)
+            collected_weights.append(n_pts)  # Gewichtung nach Anzahl Punkte
+
+            sample_data.append(
+                {
+                    "t_hat": t_hat.copy(),
+                    "n_hat": n_hat.copy(),
+                    "c_xy": grabed_xy.copy(),
+                    "sample_point_xy": sample_point_xy.copy(),
+                    "z": grabed_z,
+                }
+            )
+
+    # Fallback: Wenn keine gültigen Punkte gefunden, ursprüngliches Segment behalten
+    if len(snapped_points_chain) < 2:
+        return (
+            np.vstack(
+                [Segment3DArray_Empty(), Segment3DArray_One(approximated_segment)]
+            ),
+            sample_data,
+        )
+
+    snapped_segments = extract_segments(np.array(snapped_points_chain))
+    return np.vstack([Segment3DArray_Empty(), snapped_segments]), sample_data
