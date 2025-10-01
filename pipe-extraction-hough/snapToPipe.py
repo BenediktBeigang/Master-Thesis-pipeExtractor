@@ -14,7 +14,6 @@ from custom_types import (
     Segment3DArray_Empty,
     Segment3DArray_One,
 )
-from export import export_sample_vectors_to_obj
 from samplePointMerge import extract_segments
 
 
@@ -220,81 +219,6 @@ def _bbox_centroid_for_endpoint(
     return selected_xy, selected_z, idx_sub.size
 
 
-def snap_segments_to_point_cloud_data(
-    xyz: np.ndarray,
-    segments: Segment3DArray,
-    normal_length: float = 1.0,
-    tangential_half_width: float = 0.25,
-    min_pts: int = 4,
-    samples_per_meter: float = 1.0,
-    min_samples: int = 3,
-    poisson_radius: float = 0.02,
-    quantization_precision: float = 0.01,
-) -> Segment3DArray:
-    """
-    Uses the approximated segments that are close to the real pipes in the pointcloud and snaps to them.
-
-    ## How it works
-    The function samples points along the segment, creating an oriented bounding box around each sample point
-    and calculating the centroid of the points within the box.
-    The new snapped segment is then created from these centroids and RANSAC.
-    The length of the original segment is preserved, by projecting the endpoints of the sampling chain onto the result line by RANSAC.
-
-    Parameters
-    ----------
-    xyz : np.ndarray, shape (N, 3)
-        Point cloud data (x, y, z) in world space
-    segments_2x3 : Segment3DArray, shape (M, 2, 3)
-        List of segments to be snapped, each defined by two endpoints (x1, y1, z1) and (x2, y2, z2)
-    normal_length : float, optional
-        Length of the bounding box in normal direction (meters), by default 1.0
-    tangential_half_width : float, optional
-        Half-width of the bounding box in tangential direction (meters), by default 0.25
-    min_pts : int, optional
-        Minimum number of points required in the bounding box, by default 4
-    samples_per_meter : float, optional
-        Number of sample points per meter of segment length, by default 1.0
-    min_samples : int, optional
-        Minimum number of sample points along the segment, by default 3
-    quantization_precision : float, optional
-        Precision for quantizing z-values (meters), by default 0.01
-
-    Returns
-    -------
-    Segment3DArray, shape (N, 2, 3)
-    """
-    if not isinstance(xyz, np.ndarray) or xyz.shape[1] < 2:
-        raise ValueError("xyz has to be [N,3].")
-    XY = xyz[:, :2].astype(float, copy=False)
-
-    kdtree = KDTree(XY)
-
-    sample_data = []
-    out_segments: Segment3DArray = Segment3DArray_Empty()
-    for index, seg in enumerate(segments):
-        if index % 5 == 0:
-            print(f"Segment {index}/{len(segments)}")
-
-        snapped_segments, seg_sample_data = process_single_segment(
-            seg,
-            min_samples,
-            samples_per_meter,
-            tangential_half_width,
-            normal_length,
-            kdtree,
-            xyz,
-            XY,
-            min_pts,
-            poisson_radius,
-            quantization_precision,
-        )
-        out_segments = np.vstack([out_segments, snapped_segments])
-        sample_data.extend(seg_sample_data)
-
-    export_sample_vectors_to_obj(sample_data, tangential_half_width, normal_length)
-    return out_segments
-
-
 def process_single_segment(
     approximated_segment: Segment3D,
     min_samples: int,
@@ -303,11 +227,54 @@ def process_single_segment(
     normal_length: float,
     kdtree: KDTree,
     xyz: np.ndarray,
-    XY: np.ndarray,
+    xy: np.ndarray,
     min_pts: int,
     poisson_radius: float,
     quantization_precision: float,
 ) -> tuple[Segment3DArray, list[dict]]:
+    """
+    Processes a single segment by snapping it to the point cloud data.
+
+    ## How it works
+    Samples points along the segment, creating an oriented bounding box around each sample point and calculating the centroid of the points within the box.
+    The created point chain is then fitted with RANSAC.
+    Note that multiple segments can be returned, if the snapped points are not continuous in z-direction (pipe adapter for example splitting the pipe into two heights).
+    The length of the original segment is preserved, by projecting the endpoints onto the result RANSAC-line.
+
+    Parameters
+    ----------
+    approximated_segment : Segment3D, shape (2, 3)
+        The segment to be snapped, defined by two endpoints (x1, y1, z1) and (x2, y2, z2)
+    min_samples : int
+        Minimum number of sample points along the segment
+    samples_per_meter : float
+        Number of sample points per meter of segment length
+    tangential_half_width : float
+        Half-width of the bounding box in tangential direction (meters)
+    normal_length : float
+        Length of the bounding box in normal direction (meters)
+    kdtree : KDTree
+        KDTree built from the 2D coordinates of the point cloud for efficient nearest neighbor search
+    xyz : np.ndarray, shape (N, 3)
+        Point cloud data (x, y, z) in world space
+    xy : np.ndarray, shape (N, 2)
+        2D coordinates of the point cloud (x, y) in world space
+    min_pts : int
+        Minimum number of points required in the bounding box
+    poisson_radius : float
+        Radius for Poisson disk sampling (must be > 0)
+    quantization_precision : float
+        Precision for quantizing z-values (meters)
+
+    Returns
+    -------
+    tuple[Segment3DArray, list[dict]]
+        - Segment3DArray, shape (M, 2, 3)
+            Array of snapped segments, each defined by two endpoints (x1, y1, z1) and (x2, y2, z2)
+        - list of dict
+            List of sample data dictionaries containing information about each sample point, for later debugging/visualization in obj format
+    """
+
     if approximated_segment.shape != (2, 3):
         raise ValueError(
             f"Segment hat Form {approximated_segment.shape}, erwartet (2,3)."
@@ -358,12 +325,12 @@ def process_single_segment(
         if len(candidate_indices) < min_pts:
             continue
 
-        XY_candidates = XY[candidate_indices]
+        xy_candidates = xy[candidate_indices]
         xyz_candidates = xyz[candidate_indices]
 
         # BBox-Centroid für diesen Sample-Punkt
-        grabed_xy, grabed_z, n_pts = _bbox_centroid_for_endpoint(
-            XY_candidates,
+        grabbed_xy, grabbed_z, n_pts = _bbox_centroid_for_endpoint(
+            xy_candidates,
             xyz_candidates,
             sample_point_xy,
             t_hat,
@@ -378,7 +345,7 @@ def process_single_segment(
         # Nur verwenden wenn genügend Punkte gefunden
         if n_pts > 0:
             # 3D-Punkt: XY aus BBox, Z interpoliert
-            c_3d: Point3D = np.array([grabed_xy[0], grabed_xy[1], grabed_z])
+            c_3d: Point3D = np.array([grabbed_xy[0], grabbed_xy[1], grabbed_z])
 
             snapped_points_chain.append(c_3d)
             collected_weights.append(n_pts)  # Gewichtung nach Anzahl Punkte
@@ -387,9 +354,9 @@ def process_single_segment(
                 {
                     "t_hat": t_hat.copy(),
                     "n_hat": n_hat.copy(),
-                    "c_xy": grabed_xy.copy(),
+                    "c_xy": grabbed_xy.copy(),
                     "sample_point_xy": sample_point_xy.copy(),
-                    "z": grabed_z,
+                    "z": grabbed_z,
                 }
             )
 

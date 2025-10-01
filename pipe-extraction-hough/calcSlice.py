@@ -52,7 +52,7 @@ def slice_by_z(xyz: np.ndarray, zmin: float, zmax: float) -> np.ndarray:
 
 
 def rasterize_xy(
-    xy: np.ndarray, cell_size: float, bounds: Tuple[float, float, float, float] = None
+    xy: np.ndarray, cell_size: float
 ) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     Rasterisiert XY-Punkte in ein 2D-Count-Grid via histogram2d.
@@ -63,11 +63,8 @@ def rasterize_xy(
     xs = xy[:, 0]
     ys = xy[:, 1]
 
-    if bounds is None:
-        xmin, xmax = xs.min(), xs.max()
-        ymin, ymax = ys.min(), ys.max()
-    else:
-        xmin, xmax, ymin, ymax = bounds
+    xmin, xmax = xs.min(), xs.max()
+    ymin, ymax = ys.min(), ys.max()
 
     # Sicherheits-Pad bei degenerierten Fällen
     if xmax <= xmin:

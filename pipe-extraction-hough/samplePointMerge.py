@@ -15,33 +15,37 @@ from util import project_point_to_line
 
 
 def _buckets_by_delta_z(
-    points_3D_chain: np.ndarray,
+    points_3D_chain: Point3DArray,
     deltaZ_threshold: float,
     outlier_z_threshold: float,
 ) -> ListOfPoint3DArrays:
     """
-    Teilt eine geordnete 3D-Punktkette in Buckets, basierend auf delta-z.
-    WICHTIG: Deltas werden stets relativ zum *zuletzt akzeptierten* Punkt
-    berechnet. Outlier werden übersprungen und beeinflussen den gleitenden
-    Mittelwert nicht.
+    Groups a chain of 3D points into buckets based on z-coordinate differences.
 
-    Kontext:
-    Die Funktion dient dem Trennen von Rohren mit unterschiedlichen Höhen bzw. Neigungen.
-    Es berücksichtigt einzelne Ausreißer, wenn z.B. ein angedocktes T-Stück nach oben wegführt.
+    ## How it works
+    This function segments a sequence of 3D points by analyzing the delta-z between consecutive accepted points.
+    It uses an adaptive approach with outlier detection to handle noisy data while preserving meaningful transitions in the z-direction.
+    Outliers are single points that deviate significantly from the running mean of delta-z values (imagine three points forming a triangle).
+    Otherwise a new bucket is started when a significant change in delta-z is detected.
 
     Parameters
-    ----------
-    points_3D : (N,3) array
+    -----------
+    points_3D_chain : Point3DArray, shape (N, 3)
+        Array of shape (N, 3) containing ordered 3D points (x, y, z).
     deltaZ_threshold : float
-        Toleranz für Abweichung vom gleitenden Mittel (|dz - mean_dz|).
-    outlier_threshold : float
-        Look-Ahead-Regel: wenn dz_i + dz_{i+1} ~ 0 (innerhalb eps),
-        gilt Punkt i als Outlier und wird ignoriert.
+        Maximum allowed deviation from the running mean of z-differences
+        for a point to be considered an inlier.
+    outlier_z_threshold : float
+        Maximum z-difference threshold used for look-ahead outlier detection.
+        If skipping a potential outlier results in a z-difference below this
+        threshold, the point is considered an outlier and ignored.
 
     Returns
-    -------
-    list[np.ndarray]
-        Liste von Buckets (je ein (M_i,3)-Array, wobei M_i die Anzahl Punkte im i-ten Bucket ist).
+    --------
+    ListOfPoint3DArrays
+        List of numpy arrays, each containing a sequence of 3D points that
+        form a coherent bucket based on z-coordinate progression. Each bucket
+        contains at least 2 points.
     """
     if points_3D_chain is None or len(points_3D_chain) < 2:
         return []
@@ -121,18 +125,34 @@ def fit_ransac_line_and_project_endpoints(
     max_trials: int = 1000,
 ) -> Segment3D:
     """
-    Nutzt die Kette an Punkten um in der xy-Ebene eine Linie zu fitten.
-    Das Ergebnis sind die Endpunkte projeziert auf die durch RANSAC gefittete Linie.
-    Als Z-Werte werden die Original-Z-Werte der Endpunkte verwendet.
+    Fits a 2D line to the XY-projection of 3D points using RANSAC and projects the chain endpoints onto it.
 
-    Parameters:
-    points_2d: (N,2) numpy array, geordnete Kette (aber Reihenfolge wird hier nur für Endpunkte verwendet)
-    residual_threshold: maximaler orthogonaler Abstand für einen Inlier (in units of points)
-    min_samples: wieviele Punkte pro RANSAC-Sample
-    max_trials: maximale Iterationen
-    return_inliers: wenn True, gibt zusätzlich die boolean mask der inliers zurück
-    ---
-    Rückgabe: (line_origin, line_dir, projected_start, projected_end, inlier_mask?)
+    ## How it works
+    Performs robust line fitting on the XY-coordinates of the input 3D points using RANSAC to handle outliers.
+    The fitted line is then used to create a 3D segment by projecting the first and last points of the chain onto the line while preserving their original Z-coordinates.
+
+    Parameters
+    -----------
+    points_3D : Point3DArray, shape (N, 3)
+        Array of 3D points (x, y, z) forming an ordered chain. Must contain at least 2 points.
+    residual_threshold : float, default=0.2
+        Maximum distance from a point to the fitted line for it to be considered an inlier
+        during RANSAC fitting.
+    min_samples : float, default=2
+        Minimum number of samples required to fit the line model. Should be 2 for a 2D line.
+    max_trials : int, default=1000
+        Maximum number of RANSAC iterations to attempt before giving up.
+
+    Returns
+    --------
+    Segment3D
+        A 3D line segment represented by two 3D points: the start and end points of the
+        original chain projected onto the fitted line in XY, with their original Z-coordinates.
+
+    Raises:
+    -------
+    ValueError
+        If less than 2 points are provided or if RANSAC line fitting fails.
     """
     if len(points_3D) < 2:
         raise ValueError("Zu wenige Punkte für Linien-Fit.")
@@ -168,22 +188,38 @@ def fit_ransac_line_and_project_endpoints(
 
 
 def extract_segments(
-    points_3D: np.ndarray,
+    points_3D: Point3DArray,
     dz_threshold: float = 0.3,
     outlier_z_threshold: float = 0.1,
     ransac_residual_threshold: float = 0.05,
 ) -> Segment3DArray:
     """
-    points_3D : (N,3) geordnete Punktkette (x,y,z).
-    dz_threshold : Schwelle für Bucket-Schnitt nach delta-z-Abweichung.
-    angle_tol_deg: Winkel-Toleranz für „Richtungs-Cluster“ in einem Bucket.
-    approx_tol : Toleranz für skimage.measure.approximate_polygon (auf XY).
-    max_nn_xy_dist : optionaler Grenzwert; wenn der nächste Originalpunkt zu weit
-                     weg ist, wird trotzdem gemappt – setze das nur, wenn du hart
-                     validieren willst.
+    Extracts 3D line segments from a chain of 3D points by clustering points based on their Z-coordinates and fitting lines using RANSAC.
 
-    Rückgabe:
-      Liste von Segmenten, je Segment als np.ndarray shape (2,3).
+    ## How it works
+    This function segments a sequence of 3D points into coherent buckets based on Z-coordinate differences.
+    Each bucket is then processed to fit a 3D line segment using RANSAC, ensuring robustness against outliers.
+    The resulting segments preserve the original Z-coordinates of the endpoints.
+
+    Parameters
+    -----------
+    points_3D : Point3DArray, shape (N, 3)
+        Array of 3D points (x, y, z) forming an ordered chain. Must contain at least 2 points.
+    dz_threshold : float, default=0.3
+        Maximum allowed deviation from the running mean of z-differences
+        for a point to be considered an inlier when forming buckets.
+    outlier_z_threshold : float, default=0.1
+        Maximum z-difference threshold used for look-ahead outlier detection
+        when forming buckets.
+    ransac_residual_threshold : float, default=0.05
+        Maximum distance from a point to the fitted line for it to be considered an inlier
+        during RANSAC fitting of each bucket.
+
+    Returns
+    --------
+    Segment3DArray
+        An array of 3D line segments, each represented by two 3D points: the start and end points of the segment.
+        The segments are derived from fitting lines to the clustered buckets of points.
     """
     if (
         not isinstance(points_3D, np.ndarray)
@@ -202,9 +238,9 @@ def extract_segments(
     )
 
     segments_out: Segment3DArray = Segment3DArray_Empty()
-    for B in buckets:
+    for sub_chain in buckets:
         a, b = fit_ransac_line_and_project_endpoints(
-            B, residual_threshold=ransac_residual_threshold
+            sub_chain, residual_threshold=ransac_residual_threshold
         )
         segment_2x3 = np.vstack([a, b]).astype(float).reshape(1, 2, 3)
         segments_out = np.vstack([segments_out, segment_2x3])

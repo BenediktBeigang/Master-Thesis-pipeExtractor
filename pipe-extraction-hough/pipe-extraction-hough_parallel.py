@@ -39,19 +39,15 @@ import sys
 import numpy as np
 
 from calcSlice import get_z_slices
-from clustering_hough import (
-    cluster_segments,
-    subcluster_with_segement_z,
-)
+from clustering_hough import cluster_segments
 from custom_types import Segment3DArray
 from export import (
     write_obj_lines,
-    write_clusters_as_obj,
     write_segments_as_geojson,
 )
-from grabPipe import snap_segments_to_point_cloud_data
 from merge_segments import merge_segments_in_clusters
 from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
+from parallel_snapping import snap_segments_to_point_cloud_data_parallel
 from util import load_las, prepare_output_directory
 
 
@@ -229,7 +225,7 @@ def main():
     phase_3_enabled = True
     if phase_3_enabled:
         print("Phase 3: Snap segments to original point cloud data...")
-        all_segments = snap_segments_to_point_cloud_data(
+        all_segments = snap_segments_to_point_cloud_data_parallel(
             xyz,
             all_segments,
             normal_length=1.0,
