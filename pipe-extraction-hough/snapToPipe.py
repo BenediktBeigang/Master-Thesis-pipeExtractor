@@ -284,6 +284,13 @@ def process_single_segment(
     p2 = approximated_segment[1].copy()
     p1_xy, p2_xy = p1[:2], p2[:2]
 
+    # Ignore ghost segments far away from any points
+    points_around_p1 = kdtree.query_ball_point(p1_xy, normal_length, return_length=True)
+    points_around_p2 = kdtree.query_ball_point(p2_xy, normal_length, return_length=True)
+    if points_around_p1 == 0 and points_around_p2 == 0:
+        print(f"IGNORING GHOST SEGMENT {approximated_segment}")
+        return Segment3DArray_Empty(), []
+
     # Segmentlänge und Richtung
     segment_vec = p2 - p1
     segment_length = np.linalg.norm(segment_vec)
@@ -369,5 +376,7 @@ def process_single_segment(
             sample_data,
         )
 
-    snapped_segments = extract_segments(np.array(snapped_points_chain))
+    snapped_segments = extract_segments(
+        np.array(snapped_points_chain), samples_per_meter
+    )
     return np.vstack([Segment3DArray_Empty(), snapped_segments]), sample_data

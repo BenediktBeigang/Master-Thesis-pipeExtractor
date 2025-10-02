@@ -230,10 +230,10 @@ def main():
         all_segments = snap_segments_to_point_cloud_data_parallel(
             xyz,
             all_segments,
-            normal_length=1.0,
-            tangential_half_width=0.1,
+            normal_length=0.8,
+            tangential_half_width=0.05,
             min_pts=4,
-            samples_per_meter=1.0,
+            samples_per_meter=2.0,
             min_samples=3,
         )
 

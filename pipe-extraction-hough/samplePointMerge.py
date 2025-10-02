@@ -1,5 +1,5 @@
+import math
 import numpy as np
-from sklearn.cluster import DBSCAN
 from custom_types import (
     ListOfPoint3DArrays,
     Point2D,
@@ -15,99 +15,36 @@ from skimage.measure import LineModelND, ransac
 from util import project_point_to_line
 
 
-# def _buckets_by_dbscan_z(
-#     points_3D_chain: Point3DArray,
-#     eps: float = 0.2,
-#     min_samples: int = 2,
-# ) -> ListOfPoint3DArrays:
-#     """
-#     Groups a chain of 3D points into buckets using DBSCAN clustering on z-coordinates.
-
-#     ## How it works
-#     This function segments a sequence of 3D points by clustering their z-coordinates using DBSCAN.
-#     Each cluster becomes one bucket, regardless of sequence continuity. Clusters with too few points are discarded.
-
-#     Parameters
-#     -----------
-#     points_3D_chain : Point3DArray, shape (N, 3)
-#         Array of shape (N, 3) containing ordered 3D points (x, y, z).
-#     eps : float, default=0.2
-#         Maximum distance between two samples for one to be considered
-#         in the neighborhood of the other for DBSCAN clustering.
-#     min_samples : int, default=2
-#         Minimum number of samples in a neighborhood for a point to be
-#         considered as a core point in DBSCAN.
-
-#     Returns
-#     --------
-#     ListOfPoint3DArrays
-#         List of numpy arrays, each containing points from one DBSCAN cluster.
-#         Points maintain their original order within each bucket.
-#     """
-#     if points_3D_chain is None or len(points_3D_chain) < 2:
-#         return []
-
-#     # Extrahiere z-Koordinaten für Clustering
-#     z_coords = points_3D_chain[:, 2].reshape(-1, 1)
-
-#     # DBSCAN Clustering auf z-Koordinaten
-#     clustering = DBSCAN(eps=eps, min_samples=min_samples)
-#     cluster_labels = clustering.fit_predict(z_coords)
-
-#     # Sammle Indizes für jeden Cluster
-#     label_to_indices = {}
-#     for i, label in enumerate(cluster_labels):
-#         if label == -1:  # Noise points ignorieren
-#             continue
-#         if label not in label_to_indices:
-#             label_to_indices[label] = []
-#         label_to_indices[label].append(i)
-
-#     # Erstelle Buckets - ein Cluster = ein Bucket
-#     buckets = []
-#     for label, indices in label_to_indices.items():
-#         if len(indices) > 2:  # Cluster mit <= 2 Punkten rausfliegen
-#             # Behalte ursprüngliche Reihenfolge bei
-#             indices.sort()
-#             bucket_points = points_3D_chain[indices]
-#             buckets.append(bucket_points)
-
-#     # Debug-Output
-#     if len(buckets) > 1:
-#         print(f"{len(buckets)} DBSCAN Buckets (eps={eps}, min_samples={min_samples})")
-#         for bi, b in enumerate(buckets):
-#             z_range = b[:, 2].max() - b[:, 2].min()
-#             print(f"  Bucket {bi}: {len(b)} Punkte, z-Range: {z_range:.3f}")
-
-#     return buckets
-
-
 def _buckets_by_delta_z(
     points_3D_chain: Point3DArray,
-    deltaZ_threshold: float,
-    outlier_z_threshold: float,
+    samples_per_meter: float,
+    max_angle_change_deg: float,
     min_points_per_bucket: int = 2,
+    merge_jump_threshold: float = 3.0,
 ) -> ListOfPoint3DArrays:
     """
     Groups a chain of 3D points into buckets based on z-coordinate differences.
 
     ## How it works
-    This function segments a sequence of 3D points by analyzing the delta-z between consecutive accepted points.
-    It uses an adaptive approach with outlier detection to handle noisy data while preserving meaningful transitions in the z-direction.
-    Outliers are single points that deviate significantly from the running mean of delta-z values (imagine three points forming a triangle).
-    Otherwise a new bucket is started when a significant change in delta-z is detected.
+    This function merges a sequence of 3D points into buckets by analyzing the delta-z between consecutive accepted points.
+    Diagonal movements are filtered out by checking the mean angle of z-differences, because the pipes are expected to be mostly horizontal.
+    Gaps caused by overlapping pipes, for example, are taken into account by combining buckets.
+    This occurs when the endpoints of two buckets are below merge_jump_threshold and the average z-values are similar.
 
     Parameters
     -----------
     points_3D_chain : Point3DArray, shape (N, 3)
         Array of shape (N, 3) containing ordered 3D points (x, y, z).
-    deltaZ_threshold : float
-        Maximum allowed deviation from the running mean of z-differences
-        for a point to be considered an inlier.
-    outlier_z_threshold : float
-        Maximum z-difference threshold used for look-ahead outlier detection.
-        If skipping a potential outlier results in a z-difference below this
-        threshold, the point is considered an outlier and ignored.
+    samples_per_meter : float
+        Number of samples per meter along the chain, used to compute angles.
+    max_angle_change_deg : float
+        Maximum allowed angle change (in degrees) between consecutive points
+        to be considered part of the same bucket.
+    min_points_per_bucket : int, optional
+        Minimum number of points required in a bucket to be kept, by default 2
+    merge_jump_threshold : float, optional
+        Maximum distance between the end of one bucket and the start of the next
+        to consider merging them, by default 3.0
 
     Returns
     --------
@@ -116,6 +53,8 @@ def _buckets_by_delta_z(
         form a coherent bucket based on z-coordinate progression. Each bucket
         contains at least 2 points.
     """
+    deltaZ_threshold = math.sin(math.radians(max_angle_change_deg)) / samples_per_meter
+
     if points_3D_chain is None or len(points_3D_chain) < 2:
         return []
 
@@ -124,84 +63,74 @@ def _buckets_by_delta_z(
 
     buckets = []
     current = [points_3D_chain[0]]
-    # Statistik über akzeptierte Punkte
-    count = 0
-    mean_dz = 0.0
 
-    # Index des zuletzt AKZEPTIERTEN Punktes (nicht nur letzter iterierter)
-    last_accepted = 0
+    # Vereinfacht: nur Mean der z-Differenzen
+    dz_values = []
 
-    def accept(idx, dz):
-        nonlocal count, mean_dz, last_accepted
-        current.append(points_3D_chain[idx])
-        last_accepted = idx
-
-        # Online-Mean (Welford light)
-        count += 1
-        mean_dz += (dz - mean_dz) / count
-
-    # Starte mit erstem akzeptierten Übergang
-    # (der zweite Punkt wird gleich verarbeitet)
     for i in range(1, n):
-        dz = z[last_accepted] - z[i]
+        current_dz = z[i - 1] - z[i]
 
-        if count == 0:
-            # Warm-up: die ersten 1–2 Punkte immer akzeptieren
-            accept(i, dz)
+        # Ersten Punkt immer akzeptieren
+        if len(dz_values) == 0:
+            current.append(points_3D_chain[i])
+            dz_values.append(current_dz)
             continue
 
-        # Inlier?
-        if abs(dz - mean_dz) <= deltaZ_threshold:
-            accept(i, dz)
-            continue
+        mean_dz = np.mean(dz_values)
 
-        # Kandidat Outlier? Mit Look-Ahead relativ zu last_acc prüfen:
-        if i + 1 < n:
-            dz_without_potential_outlier = z[last_accepted] - z[i + 1]
-            if abs(dz_without_potential_outlier) <= outlier_z_threshold:
-                # i ist Outlier -> ignoriere ihn komplett
-                # (kein Update von mean/count/last_acc)
-                continue
+        # Bei Richtungswechsel neuen Bucket starten
+        if abs(current_dz - mean_dz) > deltaZ_threshold:
+            if len(current) >= min_points_per_bucket:
+                buckets.append(np.array(current))
 
-        # Mindestens ein echter Richtungswechsel -> Bucket schließen
-        if len(current) >= 2:
-            buckets.append(np.array(current))
+            # Neuer Bucket mit Überlappung
+            current = [points_3D_chain[i - 1], points_3D_chain[i]]
+            dz_values = [current_dz]
         else:
-            # Sicherheitsnetz, sollte praktisch nicht auftreten
-            buckets.append(
-                np.array([points_3D_chain[last_accepted], points_3D_chain[i]])
-            )
+            current.append(points_3D_chain[i])
+            dz_values.append(current_dz)
 
-        # Neuen Bucket starten: Naht erhalten, daher mit last_acc und i
-        current = [points_3D_chain[last_accepted], points_3D_chain[i]]
-        # Statistik neu initialisieren ab diesem Sprung
-        mean_dz = dz
-        count = 1
-        last_accepted = i
-
-    if len(current) >= 2:
+    # Add last bucket
+    if len(current) >= min_points_per_bucket:
         buckets.append(np.array(current))
 
-    multibuckets = len(buckets) > 1
-    if multibuckets:
-        print(f"{len(buckets)} Buckets")
-        for bi, b in enumerate(buckets):
-            print(f"{len(b)}")
-
-    # Mindestens 2 Punkte pro Bucket
-    buckets = [b for b in buckets if len(b) >= min_points_per_bucket]
-
-    if multibuckets:
-        print(
-            f"{len(buckets)} Buckets nach min_points_per_bucket={min_points_per_bucket}"
+    # Ignore all buckets that:
+    # - have less than min_points_per_bucket
+    # - with a mean angle change of more than 20 degrees
+    buckets = [
+        b
+        for b in buckets
+        if (
+            len(b) >= min_points_per_bucket
+            and np.mean(
+                np.abs(np.arctan(np.diff(b[:, 2]) * samples_per_meter) * 180 / np.pi)
+            )
+            < 15
         )
+    ]
 
+    # Merge buckets that are closer than merge_jump_threshold
+    merged_buckets = []
+    if len(buckets) > 1:
+        current_bucket = buckets[0]
+        for i in range(1, len(buckets)):
+            dist = np.linalg.norm(current_bucket[-1] - buckets[i][0])
+            if (
+                dist < merge_jump_threshold
+                and abs(np.mean(current_bucket[:, 2]) - np.mean(buckets[i][:, 2])) < 0.1
+            ):
+                current_bucket = np.vstack((current_bucket, buckets[i]))
+            else:
+                merged_buckets.append(current_bucket)
+                current_bucket = buckets[i]
+        merged_buckets.append(current_bucket)
+        buckets = merged_buckets
     return buckets
 
 
 def fit_ransac_line_and_project_endpoints(
     points_3D: Point3DArray,
-    residual_threshold: float = 0.2,
+    residual_threshold: float,
     min_samples: float = 2,
     max_trials: int = 1000,
 ) -> Segment3D:
@@ -270,8 +199,8 @@ def fit_ransac_line_and_project_endpoints(
 
 def extract_segments(
     points_3D: Point3DArray,
-    dz_threshold: float = 0.2,
-    outlier_z_threshold: float = 0.2,
+    samples_per_meter: float,
+    max_angle_change_deg: float = 15.0,
     ransac_residual_threshold: float = 0.05,
 ) -> Segment3DArray:
     """
@@ -289,9 +218,6 @@ def extract_segments(
     dz_threshold : float, default=0.3
         Maximum allowed deviation from the running mean of z-differences
         for a point to be considered an inlier when forming buckets.
-    outlier_z_threshold : float, default=0.1
-        Maximum z-difference threshold used for look-ahead outlier detection
-        when forming buckets.
     ransac_residual_threshold : float, default=0.05
         Maximum distance from a point to the fitted line for it to be considered an inlier
         during RANSAC fitting of each bucket.
@@ -314,8 +240,8 @@ def extract_segments(
 
     buckets = _buckets_by_delta_z(
         points_3D,
-        deltaZ_threshold=dz_threshold,
-        outlier_z_threshold=outlier_z_threshold,
+        samples_per_meter,
+        max_angle_change_deg=max_angle_change_deg,
     )
 
     # buckets = _buckets_by_dbscan_z(
