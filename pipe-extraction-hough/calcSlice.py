@@ -6,7 +6,8 @@ from mapping import pixel_to_world
 
 from skimage.feature import canny
 from skimage.filters import gaussian
-from skimage.transform import probabilistic_hough_line, hough_line
+from skimage.transform import probabilistic_hough_line
+from custom_types import Segment2DArray, Segment3DArray
 
 
 def get_z_slices(xyz: np.ndarray, thickness: float) -> List[Tuple[float, float, float]]:
@@ -100,37 +101,41 @@ def hough_segments(
     cell_size: float,
     min_line_length_m: float = 0.4,
     max_line_gap_m: float = 0.10,
-) -> Tuple[
-    List[Tuple[Tuple[float, float], Tuple[float, float]]],
-    np.ndarray,
-    np.ndarray,
-    np.ndarray,
-]:
+) -> Segment2DArray:
     """
-    Probabilistic Hough auf Binärbild.
-    Rückgabe:
-        - Liste von Segmenten in Pixelkoordinaten [( (x0,y0), (x1,y1) ), ...]
-        - Hough-Space (accumulator)
-        - angles array
-        - distances array
+    Detects line segments in a binary image using probabilistic Hough transform.
+
+    ## How it works
+    This function applies the probabilistic Hough line detection algorithm to find
+    straight line segments in a binary image. It converts metric distance parameters
+    to pixel coordinates based on the given cell size.
+
+    Args:
+        binary (np.ndarray): Binary input image where line detection is performed.
+                           Should be a 2D boolean or binary array.
+        cell_size (float): Size of each pixel/cell in meters. Used to convert
+                         metric parameters to pixel coordinates.
+        min_line_length_m (float, optional): Minimum line length in meters that
+                                           will be detected. Defaults to 0.4m.
+        max_line_gap_m (float, optional): Maximum gap in meters between line
+                                        segments that can be linked together.
+                                        Defaults to 0.10m.
+
+    Returns:
+        Segment2DArray: Array of detected line segments, each defined by start and end points in pixel coordinates.
     """
     min_len_px = max(1, int(round(min_line_length_m / cell_size)))
     max_gap_px = max(0, int(round(max_line_gap_m / cell_size)))
 
-    # Standard Hough Transform für Hough Space Visualization
-    tested_angles = np.linspace(-np.pi / 2, np.pi / 2, 180, endpoint=False)
-    h, theta, d = hough_line(binary, theta=tested_angles)
-
-    # Probabilistic Hough für Liniensegmente
     lines = probabilistic_hough_line(
         binary,
-        threshold=10,  # Abstimmbar; höher = weniger Kandidaten
-        line_length=min_len_px,  # Mindestlänge in Pixeln
-        line_gap=max_gap_px,  # maximaler Spalt in Pixeln
-        rng=42,  # Reproduzierbarkeit
+        threshold=10,  # higher = less candidates
+        line_length=min_len_px,  # min length of line in pixels
+        line_gap=max_gap_px,  # max gap between segments to link them
+        rng=42,  # for reproducibility
     )
 
-    return lines, h, theta, d
+    return lines
 
 
 def process_single_slice(
@@ -140,9 +145,30 @@ def process_single_slice(
     zmax: float,
     args,
     slice_idx: int,
-) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
+) -> Segment3DArray:
     """
-    Verarbeitet einen einzelnen Z-Slice und gibt die gefundenen Liniensegmente zurück.
+    Processes a single horizontal slice of point cloud data to detect line segments.
+
+    This function extracts points within a specific Z-range, rasterizes them into a 2D grid,
+    applies edge detection, and uses probabilistic Hough transform to find line segments
+    that potentially represent pipes or other linear structures.
+
+    Args:
+        xyz (np.ndarray): Input point cloud data as Nx3 array (x, y, z coordinates)
+        z_center (float): Center Z-coordinate of the slice for 3D reconstruction
+        zmin (float): Minimum Z-coordinate of the slice boundary
+        zmax (float): Maximum Z-coordinate of the slice boundary
+        args: Configuration object containing processing parameters:
+            - cell_size: Raster cell size in meters
+            - canny_sigma: Sigma parameter for Canny edge detection
+            - min_line_length_m: Minimum line length in meters for Hough detection
+            - max_line_gap_m: Maximum gap in meters between line segments
+        slice_idx (int): Index of the current slice (for debugging/logging purposes)
+
+    Returns:
+        Segment3DArray: List of 3D line segments found in this slice. Each segment
+                       is defined by start and end points in world coordinates.
+                       Returns empty list if no segments are detected.
     """
     sliced = slice_by_z(xyz, zmin, zmax)
 
@@ -157,21 +183,15 @@ def process_single_slice(
         canny_sigma=args.canny_sigma,
     )
 
-    seg_px, hough_space, theta, d = hough_segments(
+    seg_px = hough_segments(
         binary,
         cell_size=args.cell_size,
         min_line_length_m=args.min_line_length_m,
         max_line_gap_m=args.max_line_gap_m,
     )
 
-    if len(seg_px) == 0:
-        return []
-
-    segments_world = [pixel_to_world(seg, y_edges, x_edges, z_center) for seg in seg_px]
-
-    # Speichere Bilder und OBJ für diesen Slice wenn gewünscht
-    # if slice_in_range and len(segments_world) > 0:
-    #     save_slice_obj(segments_world, slice_idx, z_center, "./output/obj/")
-    #     save_slice_las(sliced, slice_idx, "./output/las/")
-
-    return segments_world
+    return (
+        []
+        if len(seg_px) == 0
+        else [pixel_to_world(seg, y_edges, x_edges, z_center) for seg in seg_px]
+    )

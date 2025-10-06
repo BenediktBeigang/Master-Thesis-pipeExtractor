@@ -42,6 +42,7 @@ from calcSlice import get_z_slices
 from clustering_hough import cluster_segments
 from custom_types import Segment3DArray
 from export import (
+    write_clusters_as_obj,
     write_obj_lines,
     write_segments_as_geojson,
 )
@@ -137,7 +138,8 @@ def main():
 
     prepare_output_directory("./output/")
 
-    print(f"Phase 1: Process {len(slices)} slices in parallel...")
+    print(f"Phase 1: Approximating lines...")
+    print(f"Phase 1a): Process {len(slices)} slices in parallel...")
 
     # robustes Startverfahren wählen:
     # - Linux: 'fork' nutzt COW, spart anfänglich RAM, ist ok wenn du SharedMemory sowieso nutzt
@@ -172,7 +174,7 @@ def main():
         print()
 
     print(
-        f"Phase 1: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
+        f"Phase 1a): Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
     )
     checkpointTime = time.time()
 
@@ -188,8 +190,8 @@ def main():
     print(f"rho_scale: {rho_scale:.2f}, eps_euclid: {epsilon:.2f}")
 
     # Phase 2: Cluster über alle Slices
-    print("Phase 2: Cluster and merge over all segments...")
-    result_phase2_clustering = cluster_segments(
+    print("Phase 1b): Cluster and merge over all segments and slices...")
+    result_phase1b_clustering = cluster_segments(
         all_segments,
         eps_euclid=0.5,
         min_samples=1,
@@ -197,25 +199,24 @@ def main():
         preserve_noise=True,
     )
 
-    result_phase2_clustering = result_phase2_clustering["clusters"]
-
-    # write_clusters_as_obj(
-    #     slice_idx=-1,
-    #     segments=all_segments,
-    #     clusters=result_phase2_clustering,
-    #     output_dir="./output/obj",
-    # )
+    result_phase1b_clustering = result_phase1b_clustering["clusters"]
+    write_clusters_as_obj(
+        slice_idx=-1,
+        segments=all_segments,
+        clusters=result_phase1b_clustering,
+        output_dir="./output/obj",
+    )
 
     all_segments = merge_segments_in_clusters(
         all_segments,
-        result_phase2_clustering,
+        result_phase1b_clustering,
         gap_threshold=2.0,
         min_length=1.0,
         z_max=True,
     )
 
     print(
-        f"Phase 2: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
+        f"Phase 1b): Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
     )
     checkpointTime = time.time()
 
@@ -224,9 +225,9 @@ def main():
         f"{pointcloud_name}_approx.obj",
     )
 
-    phase_3_enabled = True
-    if phase_3_enabled:
-        print("Phase 3: Snap segments to original point cloud data...")
+    phase_2_enabled = True
+    if phase_2_enabled:
+        print("Phase 2: Snap segments to original point cloud data...")
         all_segments = snap_segments_to_point_cloud_data_parallel(
             xyz,
             all_segments,
@@ -242,7 +243,7 @@ def main():
             f"{pointcloud_name}_snapped.obj",
         )
         print(
-            f"Phase 3: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
+            f"Phase 2: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
         )
         checkpointTime = time.time()
 
