@@ -13,7 +13,7 @@ def mean_z_height(segment):
 
 
 def merge_segments_in_clusters(
-    segments: Segment3DArray, clusters, gap_threshold, min_length, z_max=False
+    segments: Segment3DArray, clusters, gap_threshold, min_length
 ) -> Segment3DArray:
     if len(segments) == 0:
         return np.empty((0, 2, 3), dtype=np.float64)
@@ -87,11 +87,7 @@ def merge_segments_in_clusters(
             final_cluster_segments_1d[-1] = [
                 final_cluster_segments_1d[-1][0],  # old left
                 max(left, right),  # new right
-                (
-                    max(final_cluster_segments_1d[-1][2], z)
-                    if z_max
-                    else (final_cluster_segments_1d[-1][2] + z) / 2
-                ),  # new z
+                ((final_cluster_segments_1d[-1][2] + z) / 2),  # new z is mean z
             ]
 
         # filter out short segments and convert back to 3D world coordinates
@@ -108,10 +104,5 @@ def merge_segments_in_clusters(
             p2_3d = np.array([p2_world[0], p2_world[1], seg[2]])
 
             result_segments = np.vstack([result_segments, np.array([[p1_3d, p2_3d]])])
-            # if z_max:
-            #     seg_idx = len(result_segments) - 1
-            #     print(
-            #         f"[merge_segments] Cluster {cid} -> finales Segment #{seg_idx}: {p1_3d} -> {p2_3d}"
-            #     )
 
     return result_segments

@@ -1,9 +1,7 @@
 import math
 from typing import List, Tuple
 import numpy as np
-
 from mapping import pixel_to_world
-
 from skimage.feature import canny
 from skimage.filters import gaussian
 from skimage.transform import probabilistic_hough_line
@@ -12,10 +10,24 @@ from custom_types import Segment2DArray, Segment3DArray
 
 def get_z_slices(xyz: np.ndarray, thickness: float) -> List[Tuple[float, float, float]]:
     """
-    Berechnet alle Z-Slice Parameter (z_center, zmin, zmax) basierend auf der Bounding Box.
+    Compute all Z-slice parameters (z_center, zmin, zmax) based on the point cloud bounding box.
 
-    Returns:
-        Liste von (z_center, zmin, zmax) Tupeln für jeden Slice
+    This function determines the Z extents of the input point cloud and partitions that
+    range into horizontal slices of the given thickness. The first slice starts at the
+    minimum Z, the last slice ends at the maximum Z. Slice centers are returned along
+    with their min/max bounds.
+
+    Parameters
+    ----------
+    xyz : np.ndarray
+        Nx3 array of point coordinates (x, y, z).
+    thickness : float
+        Desired slice thickness in the same units as the point cloud (e.g. meters).
+
+    Returns
+    -------
+    List[Tuple[float, float, float]]
+        List of tuples (z_center, zmin, zmax) for each slice.
     """
     z_min = float(xyz[:, 2].min())
     z_max = float(xyz[:, 2].max())
@@ -47,7 +59,22 @@ def get_z_slices(xyz: np.ndarray, thickness: float) -> List[Tuple[float, float, 
 
 
 def slice_by_z(xyz: np.ndarray, zmin: float, zmax: float) -> np.ndarray:
-    """Extrahiert Punkte in einem Z-Bereich"""
+    """Extract points within a Z range.
+
+    Parameters
+    ----------
+    xyz : np.ndarray
+        Nx3 array of points (x, y, z).
+    zmin : float
+        Lower Z bound (inclusive).
+    zmax : float
+        Upper Z bound (inclusive).
+
+    Returns
+    -------
+    np.ndarray
+        Subset of input points whose z coordinate lies between zmin and zmax.
+    """
     mask = (xyz[:, 2] >= zmin) & (xyz[:, 2] <= zmax)
     return xyz[mask]
 
@@ -56,10 +83,23 @@ def rasterize_xy(
     xy: np.ndarray, cell_size: float
 ) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
-    Rasterisiert XY-Punkte in ein 2D-Count-Grid via histogram2d.
-    Rückgabe:
-        H: (ny, nx) array mit Zählwerten
-        edges: (y_edges, x_edges)
+    Rasterize XY points into a 2D count grid using numpy histogram2d.
+
+    The function computes a regular grid aligned with the XY extents of the provided
+    points and counts how many points fall into each cell.
+
+    Parameters
+    ----------
+    xy : np.ndarray
+        Nx2 array of XY coordinates.
+    cell_size : float
+        Edge length of a single grid cell in the same units as xy (e.g. meters).
+
+    Returns
+    -------
+    Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]
+        H : 2D array of shape (ny, nx) with per-cell counts (float64).
+        edges : Tuple of (y_edges, x_edges) returned by numpy.histogram2d.
     """
     xs = xy[:, 0]
     ys = xy[:, 1]
@@ -82,11 +122,25 @@ def rasterize_xy(
     return H.astype(np.float64), (y_edges, x_edges)
 
 
-def make_binary_from_counts(H: np.ndarray, canny_sigma: float = 1.2) -> np.ndarray:
+def make_binary_from_counts(H: np.ndarray, canny_sigma: float) -> np.ndarray:
     """
-    Erzeugt ein Binärbild für Hough.
-    - Entweder simple Count-Schwelle (H >= min_count),
-    - oder Canny auf normalisierten Counts (robuster bei ungleichmäßiger Dichte).
+    Smooth count grid and extract edges as a binary image.
+
+    This function normalizes the count grid, applies a Gaussian filter for smoothing,
+    and then runs the Canny edge detector to produce a boolean edge image suitable
+    for Hough line detection.
+
+    Parameters
+    ----------
+    H : np.ndarray
+        2D array of per-cell point counts.
+    canny_sigma : float
+        Gaussian sigma parameter passed to skimage.feature.canny.
+
+    Returns
+    -------
+    np.ndarray
+        Boolean 2D array where True indicates an edge.
     """
     if H.max() > 0:
         Hs = gaussian(H / (H.max() + 1e-9), sigma=1.0, preserve_range=True)
@@ -99,8 +153,9 @@ def make_binary_from_counts(H: np.ndarray, canny_sigma: float = 1.2) -> np.ndarr
 def hough_segments(
     binary: np.ndarray,
     cell_size: float,
-    min_line_length_m: float = 0.4,
-    max_line_gap_m: float = 0.10,
+    threshold: int,
+    min_line_length_m: float,
+    max_line_gap_m: float,
 ) -> Segment2DArray:
     """
     Detects line segments in a binary image using probabilistic Hough transform.
@@ -110,18 +165,22 @@ def hough_segments(
     straight line segments in a binary image. It converts metric distance parameters
     to pixel coordinates based on the given cell size.
 
-    Args:
-        binary (np.ndarray): Binary input image where line detection is performed.
-                           Should be a 2D boolean or binary array.
-        cell_size (float): Size of each pixel/cell in meters. Used to convert
-                         metric parameters to pixel coordinates.
-        min_line_length_m (float, optional): Minimum line length in meters that
-                                           will be detected. Defaults to 0.4m.
-        max_line_gap_m (float, optional): Maximum gap in meters between line
-                                        segments that can be linked together.
-                                        Defaults to 0.10m.
+    Parameters
+    ----------
+    binary : np.ndarray
+        Binary input image where line detection is performed.
+        Should be a 2D boolean or binary array.
+    cell_size : float
+        Size of each pixel/cell in meters. Used to convert
+        metric parameters to pixel coordinates.
+    min_line_length_m : float
+        Minimum line length in meters that will be detected. Defaults to 0.4m.
+    max_line_gap_m : float
+        Maximum gap in meters between line segments that can be linked together.
+        Defaults to 0.10m.
 
-    Returns:
+    Returns
+    -------
         Segment2DArray: Array of detected line segments, each defined by start and end points in pixel coordinates.
     """
     min_len_px = max(1, int(round(min_line_length_m / cell_size)))
@@ -129,7 +188,7 @@ def hough_segments(
 
     lines = probabilistic_hough_line(
         binary,
-        threshold=10,  # higher = less candidates
+        threshold=threshold,  # higher = less candidates
         line_length=min_len_px,  # min length of line in pixels
         line_gap=max_gap_px,  # max gap between segments to link them
         rng=42,  # for reproducibility
@@ -138,34 +197,39 @@ def hough_segments(
     return lines
 
 
-def process_single_slice(
+def find_lines_in_slice(
     xyz: np.ndarray,
     z_center: float,
     zmin: float,
     zmax: float,
-    args,
+    args: dict,
     slice_idx: int,
 ) -> Segment3DArray:
     """
     Processes a single horizontal slice of point cloud data to detect line segments.
 
+    ## How it works
     This function extracts points within a specific Z-range, rasterizes them into a 2D grid,
     applies edge detection, and uses probabilistic Hough transform to find line segments
     that potentially represent pipes or other linear structures.
 
-    Args:
-        xyz (np.ndarray): Input point cloud data as Nx3 array (x, y, z coordinates)
-        z_center (float): Center Z-coordinate of the slice for 3D reconstruction
-        zmin (float): Minimum Z-coordinate of the slice boundary
-        zmax (float): Maximum Z-coordinate of the slice boundary
-        args: Configuration object containing processing parameters:
-            - cell_size: Raster cell size in meters
-            - canny_sigma: Sigma parameter for Canny edge detection
-            - min_line_length_m: Minimum line length in meters for Hough detection
-            - max_line_gap_m: Maximum gap in meters between line segments
-        slice_idx (int): Index of the current slice (for debugging/logging purposes)
+    Parameters
+    ----------
+    xyz : np.ndarray
+        Input point cloud data as Nx3 array (x, y, z coordinates)
+    z_center : float
+        Center Z-coordinate of the slice for 3D reconstruction
+    zmin : float
+        Minimum Z-coordinate of the slice boundary
+    zmax : float
+        Maximum Z-coordinate of the slice boundary
+    args : dict
+        Configuration object containing processing Hough parameters
+    slice_idx : int
+        Index of the current slice (for debugging/logging purposes)
 
-    Returns:
+    Returns
+    -------
         Segment3DArray: List of 3D line segments found in this slice. Each segment
                        is defined by start and end points in world coordinates.
                        Returns empty list if no segments are detected.
@@ -176,18 +240,19 @@ def process_single_slice(
         return []
 
     xy = sliced[:, :2]
-    H, (y_edges, x_edges) = rasterize_xy(xy, cell_size=args.cell_size)
+    H, (y_edges, x_edges) = rasterize_xy(xy, cell_size=args["cell_size"])
 
     binary = make_binary_from_counts(
         H,
-        canny_sigma=args.canny_sigma,
+        canny_sigma=args["canny_sigma"],
     )
 
     seg_px = hough_segments(
         binary,
-        cell_size=args.cell_size,
-        min_line_length_m=args.min_line_length_m,
-        max_line_gap_m=args.max_line_gap_m,
+        cell_size=args["cell_size"],
+        threshold=args["threshold"],
+        min_line_length_m=args["min_line_length"],
+        max_line_gap_m=args["max_line_gap"],
     )
 
     return (

@@ -386,7 +386,9 @@ def write_segments_as_geojson(
 
 
 def export_sample_vectors_to_obj(
-    sample_data: list, tangential_half_width: float, normal_length: float
+    sample_data: list,
+    tangential_length: float,
+    normal_length: float,
 ):
     """
     Exportiert Sample-Point-Vektoren in eine OBJ-Datei.
@@ -398,7 +400,7 @@ def export_sample_vectors_to_obj(
     """
     with open("./sample_vectors.obj", "w") as f:
         f.write("# Sample Point Vectors Export\n")
-        f.write(f"# Tangential half width: {tangential_half_width}\n")
+        f.write(f"# Tangential half width: {tangential_length}\n")
         f.write(f"# Normal length: {normal_length}\n")
         f.write(f"# Total sample points: {len(sample_data)}\n\n")
 
@@ -419,13 +421,13 @@ def export_sample_vectors_to_obj(
 
             # Endpunkt des Tangentialvektors (beide Richtungen)
             t_end1_3d = [
-                start_3d[0] + t_hat[0] * tangential_half_width,
-                start_3d[1] + t_hat[1] * tangential_half_width,
+                start_3d[0] + t_hat[0] * tangential_length,
+                start_3d[1] + t_hat[1] * tangential_length,
                 z,
             ]
             t_end2_3d = [
-                start_3d[0] - t_hat[0] * tangential_half_width,
-                start_3d[1] - t_hat[1] * tangential_half_width,
+                start_3d[0] - t_hat[0] * tangential_length,
+                start_3d[1] - t_hat[1] * tangential_length,
                 z,
             ]
             f.write(f"v {t_end1_3d[0]:.6f} {t_end1_3d[1]:.6f} {t_end1_3d[2]:.6f}\n")

@@ -104,11 +104,7 @@ def _bbox_centroid_for_endpoint(
     sample_point_xy: Point2D,
     t_hat: np.ndarray,
     n_hat: np.ndarray,
-    tangential_half_width: float,
-    normal_length: float,
-    min_pts: int,
-    poisson_radius: float,
-    quantization_precision: float,
+    args: dict,
 ) -> tuple[Point2D, float, int]:
     """
     Calculate the centroid of points within an oriented bounding box around a segment endpoint.
@@ -136,16 +132,8 @@ def _bbox_centroid_for_endpoint(
         Unit vector in segment direction (tangent direction)
     n_hat : np.ndarray, shape (2,)
         Unit vector perpendicular to segment (normal direction)
-    tangential_half_width : float
-        Half-width of the bounding box in tangential direction (meters)
-    normal_length : float
-        Full length of the bounding box in normal direction (meters)
-    min_pts : int
-        Minimum number of points required in the bounding box
-    poisson_radius : float
-        Radius for Poisson disk sampling (must be > 0)
-    quantization_precision : float
-        Precision for quantizing z-values (meters)
+    args : dict
+        Dictionary of parameters for snapping
 
     Returns
     -------
@@ -167,23 +155,23 @@ def _bbox_centroid_for_endpoint(
     y_local = D @ n_hat
 
     # Sammle Punkte in beide Richtungen gleichzeitig (lokale Orientierungs-BBox)
-    mask = (np.abs(x_local) <= tangential_half_width) & (
-        np.abs(y_local) <= normal_length
+    mask = (np.abs(x_local) <= args["tangential_length"]) & (
+        np.abs(y_local) <= args["normal_length"]
     )
     idx = np.nonzero(mask)[0]
-    if idx.size < min_pts:
+    if idx.size < args["min_points_for_centroid"]:
         return sample_point_xy, 0.0, 0
 
-    if poisson_radius <= 0:
+    if args["poisson_radius"] <= 0:
         raise ValueError("poisson_radius must be > 0")
 
     # --- Poisson-Disk-Subsampling im lokalen Rechteck [-w, w] x [-L, L] ---
     # 1) Generiere Poisson-Disk-Samples im lokalen Domain-Rechteck
-    w = tangential_half_width
-    L = normal_length
+    w = args["tangential_length"]
+    L = args["normal_length"]
     eng = qmc.PoissonDisk(
         d=2,
-        radius=float(poisson_radius),
+        radius=float(args["poisson_radius"]),
         l_bounds=np.array([-w, -L]),
         u_bounds=np.array([+w, +L]),
         rng=int(42),
@@ -195,7 +183,7 @@ def _bbox_centroid_for_endpoint(
     if S.size == 0:
         selected_xy = cloud_2D[idx].mean(axis=0)
         z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(z_values, quantization_precision)
+        selected_z = _compute_quantized_z(z_values, args["quantization_precision"])
         return selected_xy, selected_z, idx.size
 
     # 2) Mappe Samples auf die nächstgelegenen Originalpunkte in der Box (lokal!)
@@ -204,33 +192,27 @@ def _bbox_centroid_for_endpoint(
     nn_idx = kdt.query(S, k=1)[1]  # (M,) Indizes innerhalb von 'idx'
     nn_idx = np.unique(nn_idx)  # eindeutige Auswahl
 
-    if nn_idx.size < min_pts:
+    if nn_idx.size < args["min_points_for_centroid"]:
         # Wenn zu wenige Punkte übrig bleiben, fallback auf alle Box-Punkte
         selected_xy = cloud_2D[idx].mean(axis=0)
         z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(z_values, quantization_precision)
+        selected_z = _compute_quantized_z(z_values, args["quantization_precision"])
         return selected_xy, selected_z, idx.size
 
     # 3) Schwerpunkt in Weltkoordinaten über der subsampleten Teilmenge
     idx_sub = idx[nn_idx]
     selected_xy = cloud_2D[idx_sub].mean(axis=0)
     z_values = cloud_3D[idx_sub, 2]
-    selected_z = _compute_quantized_z(z_values, quantization_precision)
+    selected_z = _compute_quantized_z(z_values, args["quantization_precision"])
     return selected_xy, selected_z, idx_sub.size
 
 
 def process_single_segment(
     approximated_segment: Segment3D,
-    min_samples: int,
-    samples_per_meter: float,
-    tangential_half_width: float,
-    normal_length: float,
     kdtree: KDTree,
     xyz: np.ndarray,
     xy: np.ndarray,
-    min_pts: int,
-    poisson_radius: float,
-    quantization_precision: float,
+    args: dict,
 ) -> tuple[Segment3DArray, list[dict]]:
     """
     Processes a single segment by snapping it to the point cloud data.
@@ -245,26 +227,14 @@ def process_single_segment(
     ----------
     approximated_segment : Segment3D, shape (2, 3)
         The segment to be snapped, defined by two endpoints (x1, y1, z1) and (x2, y2, z2)
-    min_samples : int
-        Minimum number of sample points along the segment
-    samples_per_meter : float
-        Number of sample points per meter of segment length
-    tangential_half_width : float
-        Half-width of the bounding box in tangential direction (meters)
-    normal_length : float
-        Length of the bounding box in normal direction (meters)
     kdtree : KDTree
         KDTree built from the 2D coordinates of the point cloud for efficient nearest neighbor search
     xyz : np.ndarray, shape (N, 3)
         Point cloud data (x, y, z) in world space
     xy : np.ndarray, shape (N, 2)
         2D coordinates of the point cloud (x, y) in world space
-    min_pts : int
-        Minimum number of points required in the bounding box
-    poisson_radius : float
-        Radius for Poisson disk sampling (must be > 0)
-    quantization_precision : float
-        Precision for quantizing z-values (meters)
+    args : dict
+        Dictionary of parameters for snapping
 
     Returns
     -------
@@ -285,8 +255,12 @@ def process_single_segment(
     p1_xy, p2_xy = p1[:2], p2[:2]
 
     # Ignore ghost segments far away from any points
-    points_around_p1 = kdtree.query_ball_point(p1_xy, normal_length, return_length=True)
-    points_around_p2 = kdtree.query_ball_point(p2_xy, normal_length, return_length=True)
+    points_around_p1 = kdtree.query_ball_point(
+        p1_xy, args["normal_length"], return_length=True
+    )
+    points_around_p2 = kdtree.query_ball_point(
+        p2_xy, args["normal_length"], return_length=True
+    )
     if points_around_p1 == 0 and points_around_p2 == 0:
         print(f"IGNORING GHOST SEGMENT {approximated_segment}")
         return Segment3DArray_Empty(), []
@@ -308,7 +282,10 @@ def process_single_segment(
         )
 
     # Anzahl Sample-Punkte basierend auf Segmentlänge
-    num_samples = max(min_samples, int(np.ceil(segment_length * samples_per_meter)))
+    num_samples = max(
+        args["min_sample_points"],
+        int(np.ceil(segment_length * args["samples_per_meter"])),
+    )
 
     # Tangente/Normale aus XY
     t_hat = _unit(p2_xy - p1_xy)
@@ -320,7 +297,9 @@ def process_single_segment(
     collected_weights = []
 
     # Maximale Suchradius für alle Sample-Punkte dieses Segments
-    search_radius = math.sqrt(tangential_half_width**2 + normal_length**2)
+    search_radius = math.sqrt(
+        args["tangential_length"] ** 2 + args["normal_length"] ** 2
+    )
 
     for t in t_values:
         # Interpolierter Punkt auf dem Segment
@@ -329,7 +308,7 @@ def process_single_segment(
 
         # Nur relevante Punkte per KDTree
         candidate_indices = kdtree.query_ball_point(sample_point_xy, search_radius)
-        if len(candidate_indices) < min_pts:
+        if len(candidate_indices) < args["min_points_for_centroid"]:
             continue
 
         xy_candidates = xy[candidate_indices]
@@ -342,11 +321,7 @@ def process_single_segment(
             sample_point_xy,
             t_hat,
             n_hat,
-            tangential_half_width,
-            normal_length,
-            min_pts,
-            poisson_radius,
-            quantization_precision=quantization_precision,
+            args,
         )
 
         # Nur verwenden wenn genügend Punkte gefunden
@@ -377,6 +352,6 @@ def process_single_segment(
         )
 
     snapped_segments = extract_segments(
-        np.array(snapped_points_chain), samples_per_meter
+        np.array(snapped_points_chain), args["samples_per_meter"]
     )
     return np.vstack([Segment3DArray_Empty(), snapped_segments]), sample_data

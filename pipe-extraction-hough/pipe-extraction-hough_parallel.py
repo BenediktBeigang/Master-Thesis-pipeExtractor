@@ -49,7 +49,7 @@ from export import (
 from merge_segments import merge_segments_in_clusters
 from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
 from parallel_snapping import snap_segments_to_point_cloud_data_parallel
-from util import load_las, prepare_output_directory
+from util import load_config, load_las, prepare_output_directory
 
 
 def main():
@@ -61,34 +61,9 @@ def main():
     )
     ap.add_argument("--input", required=True, help="Pfad zur LAS/LAZ-Datei")
     ap.add_argument(
-        "--thickness",
-        type=float,
-        default=0.1,
-        help="Dicke der Z-Slices (Meter), verbessert z-Wert Genauigkeit",
-    )
-    ap.add_argument(
-        "--cell-size",
-        type=float,
-        default=0.01,
-        help="Raster-Zellgröße in m (Default: 0.05), verbessert Winkelgenauigkeit",
-    )
-    ap.add_argument(
-        "--canny-sigma",
-        type=float,
-        default=1.6,
-        help="Canny Sigma (bei --use-canny)",
-    )
-    ap.add_argument(
-        "--min-line-length-m",
-        type=float,
-        default=1.5,
-        help="Mindest-Linienlänge (Meter)",
-    )
-    ap.add_argument(
-        "--max-line-gap-m",
-        type=float,
-        default=0.5,
-        help="Max. Lückenspanne zwischen Segmenten (Meter)",
+        "--config_path",
+        default="./config.json",
+        help="Pfad zur Konfigurationsdatei (JSON) mit Parametern",
     )
     ap.add_argument(
         "--output",
@@ -96,6 +71,9 @@ def main():
         help="Ausgabe-OBJ",
     )
     args = ap.parse_args()
+
+    print(f"Lade config.json...")
+    config = load_config(args.config_path)
 
     print(f"Lade Punktwolke: {args.input}")
     xyz = load_las(args.input)
@@ -108,26 +86,10 @@ def main():
     pointcloud_name = os.path.basename(args.input)
 
     # Berechne alle Z-Slices
-    slices = get_z_slices(xyz, args.thickness)
+    slices = get_z_slices(xyz, config["slice_thickness"])
 
     # Shared Memory vorbereiten
     shm, shape, dtype_str = share_xyz_array(xyz)
-
-    # Klein gehaltene, picklbare Argumente für den Worker
-    args_dict = dict(
-        cell_size=args.cell_size,
-        canny_sigma=args.canny_sigma,
-        min_line_length_m=args.min_line_length_m,
-        max_line_gap_m=args.max_line_gap_m,
-        local_eps_euclid=0.35,
-        local_min_samples=3,
-        local_rho_scale=1.0,
-        local_preserve_noise=False,
-        local_gap_threshold=2.0,
-        local_min_length=1.0,
-        local_z_max=False,
-        merge_segments=True,
-    )
 
     # Tasks in der Reihenfolge der Slices bauen (bewahrt Sortierung)
     tasks = [(i, zc, zmin, zmax) for i, (zc, zmin, zmax) in enumerate(slices)]
@@ -155,18 +117,17 @@ def main():
             initializer=_init_shm,
             initargs=(shm.name, shape, dtype_str),
         ) as ex:
-            # worker_process_slice ist TOP-LEVEL und nimmt (task, args_dict) an
             for slice_idx, segments in ex.map(
                 worker_process_slice,
-                tasks,  # iterable 1: task tuples
-                repeat(args_dict),  # iterable 2: args_dict für jeden Task
+                tasks,
+                repeat(args.config_path),
                 chunksize=chunksize,
             ):
                 if len(segments) > 0:
                     all_segments = np.vstack([all_segments, segments])
                 total_processed += 1
                 if total_processed % 10 == 0:
-                    print(f"Verarbeitet: {total_processed}/{len(slices)} Slices")
+                    print(f"Finished: {total_processed}/{len(slices)} Slices")
     finally:
         # SHM nur im Hauptprozess schließen/unlinken
         shm.close()
@@ -179,23 +140,24 @@ def main():
     checkpointTime = time.time()
 
     if len(all_segments) == 0:
-        print("Keine Linien in keinem einzigen Slice gefunden.", file=sys.stderr)
+        print("No lines found in any slice.", file=sys.stderr)
         sys.exit(0)
 
-    distance_tolerance_m = 1
-    angle_tolerance_deg = 5
-    angle_tolerance_radians = math.radians(angle_tolerance_deg)
-    rho_scale = (distance_tolerance_m) / (2 * math.sin(angle_tolerance_radians))
-    epsilon = math.sqrt(2) * 2 * math.sin(angle_tolerance_radians)
-    print(f"rho_scale: {rho_scale:.2f}, eps_euclid: {epsilon:.2f}")
+    # distance_tolerance_m = 1
+    # angle_tolerance_deg = 5
+    # angle_tolerance_radians = math.radians(angle_tolerance_deg)
+    # rho_scale = (distance_tolerance_m) / (2 * math.sin(angle_tolerance_radians))
+    # epsilon = math.sqrt(2) * 2 * math.sin(angle_tolerance_radians)
+    # print(f"rho_scale: {rho_scale:.2f}, eps_euclid: {epsilon:.2f}")
 
     # Phase 2: Cluster über alle Slices
     print("Phase 1b): Cluster and merge over all segments and slices...")
+    clusterAndMerge_args = config["global_cluster_and_merge"]
     result_phase1b_clustering = cluster_segments(
         all_segments,
-        eps_euclid=0.5,
-        min_samples=1,
-        rho_scale=1.3,
+        eps_euclid=clusterAndMerge_args["epsilon"],
+        min_samples=clusterAndMerge_args["min_samples"],
+        rho_scale=clusterAndMerge_args["rho_scale"],
         preserve_noise=True,
     )
 
@@ -210,9 +172,8 @@ def main():
     all_segments = merge_segments_in_clusters(
         all_segments,
         result_phase1b_clustering,
-        gap_threshold=2.0,
-        min_length=1.0,
-        z_max=True,
+        gap_threshold=clusterAndMerge_args["max_line_gap"],
+        min_length=clusterAndMerge_args["min_line_length"],
     )
 
     print(
@@ -231,11 +192,7 @@ def main():
         all_segments = snap_segments_to_point_cloud_data_parallel(
             xyz,
             all_segments,
-            normal_length=0.8,
-            tangential_half_width=0.05,
-            min_pts=4,
-            samples_per_meter=2.0,
-            min_samples=3,
+            args.config_path,
         )
 
         write_obj_lines(
@@ -252,12 +209,12 @@ def main():
         f"{pointcloud_name}_pipes.geojson",
     )
 
-    print(f"\nFertig!")
-    print(f"Verarbeitete Slices: {len(slices)}")
-    print(f"Gefundene Linien gesamt: {len(all_segments)}")
-    print(f"Ausgabedatei: {args.output}")
+    print(f"\nFinished!")
+    print(f"Processed slices: {len(slices)}")
+    print(f"Total lines found: {len(all_segments)}")
+    print(f"Output file: {args.output}")
     endTime = time.time()
-    print(f"Benötigte Zeit insgesamt: {endTime - startTime:.2f} Sekunden")
+    print(f"Total time taken: {endTime - startTime:.2f} seconds")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
 import os
 import shutil
+from types import SimpleNamespace
 import numpy as np
 import laspy
+import json
 
 
 def load_las(path: str, ignoreZ: bool = False) -> np.ndarray:
@@ -36,6 +38,14 @@ def prepare_output_directory(output_dir: str):
 
     print("---------------------------")
     print()
+
+
+def load_config(config_path: str) -> dict:
+    try:
+        with open(config_path, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        raise RuntimeError(f"Konnte Konfigurationsdatei nicht laden: {e}")
 
 
 def point_to_line_distance(point, line_start, line_end):

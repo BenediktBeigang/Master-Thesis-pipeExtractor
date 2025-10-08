@@ -5,6 +5,7 @@ from multiprocessing import shared_memory, get_context
 import numpy as np
 from scipy.spatial import KDTree
 from custom_types import Segment3DArray, Segment3DArray_Empty
+from util import load_config
 
 # Globals, die im Worker gefüllt werden
 _SHM = None
@@ -25,7 +26,7 @@ def _init_shm(shm_name, shape, dtype_str):
     _KDTREE = KDTree(XY)
 
 
-def worker_process_segment(task, args_dict):
+def worker_process_segment(task, config_path):
     """
     task: (segment_idx, segment)
     args_dict: Parameter für das Segment-Processing
@@ -38,30 +39,16 @@ def worker_process_segment(task, args_dict):
         print("Fehler: _XYZ oder _KDTREE ist None im Worker!")
         return (segment_idx, Segment3DArray_Empty(), [])
 
-    # Extract parameters from args_dict
-    min_samples = args_dict["min_samples"]
-    samples_per_meter = args_dict["samples_per_meter"]
-    tangential_half_width = args_dict["tangential_half_width"]
-    normal_length = args_dict["normal_length"]
-    min_pts = args_dict["min_pts"]
-    poisson_radius = args_dict["poisson_radius"]
-    quantization_precision = args_dict["quantization_precision"]
-
     xy = _XYZ[:, :2].astype(float, copy=False)
+    args = load_config(config_path)["snap_to_pipe"]
 
     # Process the segment
     snapped_segments, seg_sample_data = process_single_segment(
         segment,
-        min_samples,
-        samples_per_meter,
-        tangential_half_width,
-        normal_length,
         _KDTREE,
         _XYZ,
         xy,
-        min_pts,
-        poisson_radius,
-        quantization_precision,
+        args,
     )
 
     return (segment_idx, snapped_segments, seg_sample_data)
@@ -77,14 +64,8 @@ def share_xyz_array(xyz: np.ndarray):
 
 def snap_segments_to_point_cloud_data_parallel(
     xyz: np.ndarray,
-    segments,
-    normal_length: float = 1.0,
-    tangential_half_width: float = 0.25,
-    min_pts: int = 4,
-    samples_per_meter: float = 1.0,
-    min_samples: int = 3,
-    poisson_radius: float = 0.02,
-    quantization_precision: float = 0.01,
+    segments: Segment3DArray,
+    config_path: str,
     max_workers: int = -1,
 ) -> Segment3DArray:
     """
@@ -97,18 +78,8 @@ def snap_segments_to_point_cloud_data_parallel(
         Point cloud data (x, y, z) in world space
     segments : Segment3DArray, shape (M, 2, 3)
         List of segments to be snapped, each defined by two endpoints (x1, y1, z1) and (x2, y2, z2)
-    normal_length : float, optional
-        Length of the bounding box in normal direction (meters), by default 1.0
-    tangential_half_width : float, optional
-        Half-width of the bounding box in tangential direction (meters), by default 0.25
-    min_pts : int, optional
-        Minimum number of points required in the bounding box, by default 4
-    samples_per_meter : float, optional
-        Number of sample points per meter of segment length, by default 1.0
-    min_samples : int, optional
-        Minimum number of sample points along the segment, by default 3
-    quantization_precision : float, optional
-        Precision for quantizing z-values (meters), by default 0.01
+    config_path : str
+        Path to the configuration file (JSON) containing parameters for snapping
     max_workers : int, optional
         Maximum number of parallel worker processes, by default -1 (all available cores)
 
@@ -125,17 +96,6 @@ def snap_segments_to_point_cloud_data_parallel(
     # Shared Memory vorbereiten
     shm, shape, dtype_str = share_xyz_array(xyz)
 
-    # Parameter-Dictionary für Worker
-    args_dict = dict(
-        min_samples=min_samples,
-        samples_per_meter=samples_per_meter,
-        tangential_half_width=tangential_half_width,
-        normal_length=normal_length,
-        min_pts=min_pts,
-        poisson_radius=poisson_radius,
-        quantization_precision=quantization_precision,
-    )
-
     # Tasks erstellen: (segment_idx, segment)
     tasks = [(i, seg) for i, seg in enumerate(segments)]
 
@@ -150,7 +110,9 @@ def snap_segments_to_point_cloud_data_parallel(
         max_workers = os.cpu_count() or 4
     chunksize = max(1, len(tasks) // (max_workers * 4))  # adaptive chunksize
 
-    print(f"Verarbeite {len(segments)} Segmente parallel mit {max_workers} Workern...")
+    print(
+        f"Processing {len(segments)} segments in parallel with {max_workers} workers..."
+    )
 
     try:
         with ProcessPoolExecutor(
@@ -165,7 +127,7 @@ def snap_segments_to_point_cloud_data_parallel(
             for segment_idx, snapped_segments, seg_sample_data in executor.map(
                 worker_process_segment,
                 tasks,
-                repeat(args_dict),
+                repeat(config_path),
                 chunksize=chunksize,
             ):
                 if len(snapped_segments) > 0:
@@ -174,16 +136,21 @@ def snap_segments_to_point_cloud_data_parallel(
 
                 total_processed += 1
                 if total_processed % 10 == 0:
-                    print(f"Verarbeitet: {total_processed}/{len(segments)} Segmente")
+                    print(f"Finished: {total_processed}/{len(segments)} segments")
 
     finally:
         # SHM nur im Hauptprozess schließen/unlinken
         shm.close()
         shm.unlink()
 
-    print(f"Parallelisierung abgeschlossen: {total_processed} Segmente verarbeitet")
+    print(f"Processing complete: {total_processed} segments processed")
 
     # Export der Sample-Daten
-    export_sample_vectors_to_obj(sample_data, tangential_half_width, normal_length)
+    args = load_config(config_path)["snap_to_pipe"]
+    export_sample_vectors_to_obj(
+        sample_data,
+        args["tangential_length"],
+        args["normal_length"],
+    )
 
     return out_segments
