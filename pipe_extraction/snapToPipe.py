@@ -14,7 +14,7 @@ from custom_types import (
     Segment3DArray_Empty,
     Segment3DArray_One,
 )
-from samplePointMerge import extract_segments
+from pipe_extraction.samplePointMerge import extract_segments
 
 
 def _unit(v: np.ndarray) -> np.ndarray:

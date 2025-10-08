@@ -1,21 +1,66 @@
 import os
 import shutil
-from types import SimpleNamespace
 import numpy as np
 import laspy
 import json
 
 
-def load_las(path: str, ignoreZ: bool = False) -> np.ndarray:
+def get_classification_array(las):
+    cls = getattr(las, "classification", None)
+    if cls is not None:
+        return cls
+
+    for name in ("classification", "Classification"):
+        try:
+            return las[name]
+        except Exception:
+            pass
+
+    dims = getattr(las.point_format, "dimension_names", [])
+    for name in ("classification", "Classification"):
+        if name in dims:
+            return las[name]
+    raise RuntimeError("LAS enthält kein Feld 'Classification' / 'classification'.")
+
+
+def load_las(path: str, ignoreZ: bool = False, filterClass: int = None) -> np.ndarray:
     """
-    Lädt die XYZ-Koordinaten aus einer LAS-Datei.
-    Wenn ignoreZ gesetzt ist, werden nur X und Y geladen (2D).
+    Loads a LAS/LAZ file and returns a Nx3 numpy array of points.
+
+    Parameters
+    ----------
+    path : str
+        Path to the LAS/LAZ file.
+    ignoreZ : bool, optional
+        If True, only X and Y coordinates are returned (Z is ignored). Default is False.
+    filterClass : int, optional
+        If provided, only points with the specified classification are returned. Default is None.
+
+    Returns
+    -------
+    Point3DArray or Point2DArray
+        Nx3 array of points (X, Y, Z) or Nx2 if ignoreZ is True.
     """
     try:
+        print(f"Load LAS-File: {path}")
         las = laspy.read(path)
+
+        mask = (
+            None
+            if filterClass is None
+            else filterClass == get_classification_array(las)
+        )
+
+        # Hole Koordinaten ggf. gefiltert
+        x = las.x[mask] if mask is not None else las.x
+        y = las.y[mask] if mask is not None else las.y
+
         if ignoreZ:
-            return np.vstack((las.x, las.y)).T.astype(np.float64)
-        return np.vstack((las.x, las.y, las.z)).T.astype(np.float64)
+            return np.vstack((x, y)).T.astype(np.float64)
+
+        z = las.z[mask] if mask is not None else las.z
+        return np.vstack((x, y, z)).T.astype(np.float64)
+
     except Exception as e:
         raise RuntimeError(f"Konnte LAS nicht laden: {e}")
 

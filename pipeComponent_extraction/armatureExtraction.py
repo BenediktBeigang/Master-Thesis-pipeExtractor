@@ -277,7 +277,7 @@ if __name__ == "__main__":
     start_time = time.time()
 
     main(
-        las_path="./ontras_3_predicted_0819_t1_c2.las",
+        las_path="./ontras_3_predicted_0916_t1_c2.las",
         pipeJson_path="./output/20250821_102717_all_pipes.json",
         ignore_z=True,
         near_pipe_filter=False,

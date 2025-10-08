@@ -1,100 +1,72 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-2D-Liniendetektion in Z-Slices einer LAS-Punktwolke per Rasterisierung + Hough,
-Export aller Linien als OBJ (Polylines) für CloudCompare.
-
-Abhängigkeiten:
-    numpy
-    laspy        (>=2.0 empfohlen; Fallback für 1.7.0 integriert)
-    scikit-image (skimage)
-    matplotlib   (für Bildexport)
-
-Beispiel:
-    python slice_hough_obj.py \
-        --input in.las \
-        --thickness 0.10 \
-        --cell-size 0.03 \
-        --min-count 3 \
-        --use-canny \
-        --canny-sigma 1.2 \
-        --min-line-length-m 0.40 \
-        --max-line-gap-m 0.10 \
-        --top-k 300 \
-        --output lines.obj \
-        --save-images \
-        --image-output-dir slice_images
-"""
-
 from itertools import repeat
-import argparse
 from concurrent.futures import ProcessPoolExecutor
-import datetime
-import math
 from multiprocessing import get_context
 import os
 import time
 import sys
-
 import numpy as np
-
-from calcSlice import get_z_slices
-from clustering_hough import cluster_segments
+from pipe_extraction.calcSlice import get_z_slices
+from pipe_extraction.clustering_hough import cluster_segments
 from custom_types import Segment3DArray
-from export import (
+from pipe_extraction.export import (
     write_clusters_as_obj,
     write_obj_lines,
     write_segments_as_geojson,
 )
-from merge_segments import merge_segments_in_clusters
-from parallel_slices import share_xyz_array, _init_shm, worker_process_slice
-from parallel_snapping import snap_segments_to_point_cloud_data_parallel
-from util import load_config, load_las, prepare_output_directory
+from pipe_extraction.merge_segments import merge_segments_in_clusters
+from pipe_extraction.parallel_slices import (
+    share_xyz_array,
+    _init_shm,
+    worker_process_slice,
+)
+from pipe_extraction.parallel_snapping import snap_segments_to_point_cloud_data_parallel
+from util import load_config, prepare_output_directory
 
 
-def main():
+def extract_pipes(
+    xyz: np.ndarray, config_path: str, pointcloudName: str
+) -> Segment3DArray:
+    """
+    Extracts pipes from a point cloud.
+
+    Parameters:
+    -----------
+    xyz : np.ndarray
+        The input point cloud as a Nx3 numpy array.
+    config_path : str
+        Path to the configuration JSON file.
+    pointcloudName : str
+        Base name for output files (without extension).
+
+    Returns:
+    --------
+    Segment3DArray
+        An array of extracted pipe segments.
+    """
     startTime = time.time()
     checkpointTime = startTime
 
-    ap = argparse.ArgumentParser(
-        description="Z-Slice Hough-Liniendetektion aus LAS → OBJ (CloudCompare)"
-    )
-    ap.add_argument("--input", required=True, help="Pfad zur LAS/LAZ-Datei")
-    ap.add_argument(
-        "--config_path",
-        default="./config.json",
-        help="Pfad zur Konfigurationsdatei (JSON) mit Parametern",
-    )
-    ap.add_argument(
-        "--output",
-        default="houghOutput.obj",
-        help="Ausgabe-OBJ",
-    )
-    args = ap.parse_args()
+    print(f"Load config.json...")
+    config = load_config(config_path)
 
-    print(f"Lade config.json...")
-    config = load_config(args.config_path)
-
-    print(f"Lade Punktwolke: {args.input}")
-    xyz = load_las(args.input)
     if xyz.size == 0:
-        print("Leere Punktwolke.", file=sys.stderr)
+        print("Empty Pointcloud.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Punktwolke geladen: {xyz.shape[0]} Punkte")
+    print(f"Pointcloud loaded: {xyz.shape[0]} points")
 
-    pointcloud_name = os.path.basename(args.input)
-
-    # Berechne alle Z-Slices
+    # Compute all Z-slices
     slices = get_z_slices(xyz, config["slice_thickness"])
 
-    # Shared Memory vorbereiten
+    # Prepare Shared Memory
     shm, shape, dtype_str = share_xyz_array(xyz)
 
-    # Tasks in der Reihenfolge der Slices bauen (bewahrt Sortierung)
+    # Build tasks in the order of slices (preserves sorting)
     tasks = [(i, zc, zmin, zmax) for i, (zc, zmin, zmax) in enumerate(slices)]
 
-    # Verarbeite alle Slices
+    # Process all slices
     all_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
     total_processed = 0
 
@@ -103,7 +75,7 @@ def main():
     print(f"Phase 1: Approximating lines...")
     print(f"Phase 1a): Process {len(slices)} slices in parallel...")
 
-    # robustes Startverfahren wählen:
+    # Choose robust start method for multiprocessing:
     # - Linux: 'fork' nutzt COW, spart anfänglich RAM, ist ok wenn du SharedMemory sowieso nutzt
     # - Windows/macOS: 'spawn' ist Standard, SHM funktioniert dort genau für diesen Use-Case
     ctx = get_context()  # Standard-Startmethode des OS
@@ -120,7 +92,7 @@ def main():
             for slice_idx, segments in ex.map(
                 worker_process_slice,
                 tasks,
-                repeat(args.config_path),
+                repeat(config_path),
                 chunksize=chunksize,
             ):
                 if len(segments) > 0:
@@ -150,7 +122,7 @@ def main():
     # epsilon = math.sqrt(2) * 2 * math.sin(angle_tolerance_radians)
     # print(f"rho_scale: {rho_scale:.2f}, eps_euclid: {epsilon:.2f}")
 
-    # Phase 2: Cluster über alle Slices
+    # Phase 2: Cluster over all slices
     print("Phase 1b): Cluster and merge over all segments and slices...")
     clusterAndMerge_args = config["global_cluster_and_merge"]
     result_phase1b_clustering = cluster_segments(
@@ -183,7 +155,7 @@ def main():
 
     write_obj_lines(
         all_segments,
-        f"{pointcloud_name}_approx.obj",
+        f"{pointcloudName}_approx.obj",
     )
 
     phase_2_enabled = True
@@ -192,12 +164,12 @@ def main():
         all_segments = snap_segments_to_point_cloud_data_parallel(
             xyz,
             all_segments,
-            args.config_path,
+            config_path,
         )
 
         write_obj_lines(
             all_segments,
-            f"{pointcloud_name}_snapped.obj",
+            f"{pointcloudName}_snapped.obj",
         )
         print(
             f"Phase 2: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
@@ -206,16 +178,13 @@ def main():
 
     write_segments_as_geojson(
         all_segments,
-        f"{pointcloud_name}_pipes.geojson",
+        f"{pointcloudName}_pipes.geojson",
     )
 
     print(f"\nFinished!")
     print(f"Processed slices: {len(slices)}")
     print(f"Total lines found: {len(all_segments)}")
-    print(f"Output file: {args.output}")
     endTime = time.time()
     print(f"Total time taken: {endTime - startTime:.2f} seconds")
 
-
-if __name__ == "__main__":
-    main()
+    return all_segments

@@ -1,4 +1,3 @@
-# parallel_grabPipe.py
 import os
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import shared_memory, get_context
@@ -7,7 +6,7 @@ from scipy.spatial import KDTree
 from custom_types import Segment3DArray, Segment3DArray_Empty
 from util import load_config
 
-# Globals, die im Worker gefüllt werden
+# Globals, which are filled in the worker
 _SHM = None
 _XYZ = None
 _SHAPE = None
@@ -31,7 +30,7 @@ def worker_process_segment(task, config_path):
     task: (segment_idx, segment)
     args_dict: Parameter für das Segment-Processing
     """
-    from snapToPipe import process_single_segment
+    from pipe_extraction.snapToPipe import process_single_segment
 
     segment_idx, segment = task
 
@@ -88,23 +87,23 @@ def snap_segments_to_point_cloud_data_parallel(
     Segment3DArray, shape (N, 2, 3)
     """
     from custom_types import Segment3DArray_Empty
-    from export import export_sample_vectors_to_obj
+    from pipe_extraction.export import export_sample_vectors_to_obj
 
     if not isinstance(xyz, np.ndarray) or xyz.shape[1] < 2:
         raise ValueError("xyz has to be [N,3].")
 
-    # Shared Memory vorbereiten
+    # Prepare Shared Memory
     shm, shape, dtype_str = share_xyz_array(xyz)
 
-    # Tasks erstellen: (segment_idx, segment)
+    # Create tasks: (segment_idx, segment)
     tasks = [(i, seg) for i, seg in enumerate(segments)]
 
-    # Ergebnis-Arrays initialisieren
+    # Initialize result arrays
     out_segments: Segment3DArray = Segment3DArray_Empty()
     sample_data = []
     total_processed = 0
 
-    # Parallelisierung
+    # Parallelization
     ctx = get_context()
     if max_workers == -1:
         max_workers = os.cpu_count() or 4
@@ -123,7 +122,7 @@ def snap_segments_to_point_cloud_data_parallel(
         ) as executor:
             from itertools import repeat
 
-            # Alle Segmente parallel verarbeiten
+            # Process all segments in parallel
             for segment_idx, snapped_segments, seg_sample_data in executor.map(
                 worker_process_segment,
                 tasks,
@@ -139,13 +138,13 @@ def snap_segments_to_point_cloud_data_parallel(
                     print(f"Finished: {total_processed}/{len(segments)} segments")
 
     finally:
-        # SHM nur im Hauptprozess schließen/unlinken
+        # SHM only in the main process close/unlink
         shm.close()
         shm.unlink()
 
     print(f"Processing complete: {total_processed} segments processed")
 
-    # Export der Sample-Daten
+    # Export of the Sample Data
     args = load_config(config_path)["snap_to_pipe"]
     export_sample_vectors_to_obj(
         sample_data,

@@ -1,5 +1,4 @@
 import numpy as np
-
 from custom_types import Segment3DArray
 
 

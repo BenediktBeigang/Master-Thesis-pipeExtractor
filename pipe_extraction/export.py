@@ -1,4 +1,3 @@
-import math
 import os
 from typing import List, Tuple
 import numpy as np
@@ -6,7 +5,6 @@ import matplotlib.pyplot as plt
 from skimage.transform import hough_line_peaks
 import laspy
 import json
-
 from custom_types import Segment3DArray
 
 

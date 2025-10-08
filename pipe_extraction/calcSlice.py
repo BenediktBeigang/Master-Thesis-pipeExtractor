@@ -1,7 +1,7 @@
 import math
 from typing import List, Tuple
 import numpy as np
-from mapping import pixel_to_world
+from pipe_extraction.mapping import pixel_to_world
 from skimage.feature import canny
 from skimage.filters import gaussian
 from skimage.transform import probabilistic_hough_line
