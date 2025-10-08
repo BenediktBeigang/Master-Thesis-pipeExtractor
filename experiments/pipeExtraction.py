@@ -1,6 +1,6 @@
 import datetime
 from PipeEvoSearch import find_one_pipe, initialize_globals
-from PipeCluster import clean_pipes
+from experiments.PipeCluster import clean_pipes
 import os
 import json
 import math

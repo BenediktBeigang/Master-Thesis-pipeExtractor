@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import random
-from individualValidation import is_individual_valid
+from experiments.individualValidation import is_individual_valid
 import laspy
 from pyntcloud import PyntCloud
 import pandas as pd

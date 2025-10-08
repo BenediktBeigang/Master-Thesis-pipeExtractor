@@ -1,0 +1,37 @@
+{
+  "global": {
+    "slice_thickness": 0.1
+  },
+  "hough": {
+    "cell_size": 0.01,
+    "canny_sigma": 1.6,
+    "threshold": 10,
+    "min_line_length": 1.5,
+    "max_line_gap": 0.5
+  },
+  "slice_cluster_and_merge": {
+    "dbscan_epsilon": 0.35,
+    "min_samples": 3,
+    "rho_scale": 1.0,
+    "preserve_noise": false,
+    "min_line_length": 1.5,
+    "max_line_gap": 2.0
+  },
+  "global_cluster_and_merge": {
+    "dbscan_epsilon": 0.5,
+    "min_samples": 1,
+    "rho_scale": 1.3,
+    "preserve_noise": true,
+    "min_line_length": 1.0,
+    "max_line_gap": 2.0
+  },
+  "snap_to_pipe": {
+    "normal_length": 0.8,
+    "tangential_length": 0.05,
+    "min_points_for_centroid": 4,
+    "samples_per_meter": 2.0,
+    "min_point_samples": 3,
+    "poisson_radius": 0.02,
+    "quantization_precision": 0.01
+  }
+}

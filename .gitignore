@@ -2,6 +2,7 @@
 *.obj
 *.csv
 *.json
+!config.json
 *.geojson
 *.png
 

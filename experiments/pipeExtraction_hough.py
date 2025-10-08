@@ -29,7 +29,7 @@ import time
 import math
 import sys
 from typing import Tuple, List
-from PipeCluster import clean_pipes
+from experiments.PipeCluster import clean_pipes
 from skimage.feature import canny
 from skimage.filters import gaussian
 from skimage.transform import probabilistic_hough_line

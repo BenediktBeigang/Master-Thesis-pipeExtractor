@@ -59,7 +59,7 @@ def _compute_quantized_z(z_values: np.ndarray, bucket_size: float) -> float:
     counts, bin_edges = np.histogram(z_values, bins=num_buckets, range=(z_min, z_max))
 
     # Schwellwert als Mittelwert der Häufigkeiten
-    threshold = counts.mean() / 2
+    threshold = np.median(counts) / 2
 
     # Ersten Bucket über Schwellwert finden
     over_threshold = np.where(counts >= threshold)[0]
