@@ -66,20 +66,20 @@ def load_las(path: str, ignoreZ: bool = False, filterClass: int = None) -> np.nd
 
 
 def prepare_output_directory(output_dir: str):
+    subdirs_to_clean = ["obj", "geojson"]
     if os.path.exists(output_dir):
         # Lösche spezifische Unterordner
-        subdirs_to_clean = ["hough", "lines", "obj", "las"]
         for subdir in subdirs_to_clean:
             subdir_path = os.path.join(output_dir, subdir)
             if os.path.exists(subdir_path):
                 shutil.rmtree(subdir_path)
                 print(f"Verzeichnis {subdir_path} geleert")
 
-        # Erstelle alle Ordner wieder neu
-        for subdir in subdirs_to_clean:
-            subdir_path = os.path.join(output_dir, subdir)
-            os.makedirs(subdir_path, exist_ok=True)
-            print(f"Verzeichnis {subdir_path} neu erstellt")
+    # Erstelle alle Ordner neu
+    for subdir in subdirs_to_clean:
+        subdir_path = os.path.join(output_dir, subdir)
+        os.makedirs(subdir_path, exist_ok=True)
+        print(f"Verzeichnis {subdir_path} neu erstellt")
 
     print("---------------------------")
     print()

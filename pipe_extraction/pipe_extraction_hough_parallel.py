@@ -13,7 +13,6 @@ from custom_types import Segment3DArray
 from pipe_extraction.export import (
     write_clusters_as_obj,
     write_obj_lines,
-    write_segments_as_geojson,
 )
 from pipe_extraction.merge_segments import merge_segments_in_clusters
 from pipe_extraction.parallel_slices import (
@@ -22,7 +21,7 @@ from pipe_extraction.parallel_slices import (
     worker_process_slice,
 )
 from pipe_extraction.parallel_snapping import snap_segments_to_point_cloud_data_parallel
-from util import load_config, prepare_output_directory
+from util import load_config
 
 
 def extract_pipes(
@@ -69,8 +68,6 @@ def extract_pipes(
     # Process all slices
     all_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
     total_processed = 0
-
-    prepare_output_directory("./output/")
 
     print(f"Phase 1: Approximating lines...")
     print(f"Phase 1a): Process {len(slices)} slices in parallel...")
@@ -135,10 +132,9 @@ def extract_pipes(
 
     result_phase1b_clustering = result_phase1b_clustering["clusters"]
     write_clusters_as_obj(
-        slice_idx=-1,
         segments=all_segments,
         clusters=result_phase1b_clustering,
-        output_dir="./output/obj",
+        output_path=f"./output/obj/{pointcloudName}_cluster.obj",
     )
 
     all_segments = merge_segments_in_clusters(
@@ -155,7 +151,7 @@ def extract_pipes(
 
     write_obj_lines(
         all_segments,
-        f"{pointcloudName}_approx.obj",
+        f"./output/obj/{pointcloudName}_approx.obj",
     )
 
     phase_2_enabled = True
@@ -169,17 +165,12 @@ def extract_pipes(
 
         write_obj_lines(
             all_segments,
-            f"{pointcloudName}_snapped.obj",
+            f"./output/obj/{pointcloudName}_snapped.obj",
         )
         print(
             f"Phase 2: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
         )
         checkpointTime = time.time()
-
-    write_segments_as_geojson(
-        all_segments,
-        f"{pointcloudName}_pipes.geojson",
-    )
 
     print(f"\nFinished!")
     print(f"Processed slices: {len(slices)}")

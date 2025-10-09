@@ -1,4 +1,4 @@
-from typing import Annotated, Tuple, Union
+from typing import Annotated, Tuple
 from numpy.typing import NDArray
 import numpy as np
 
@@ -42,3 +42,7 @@ def Segment3DArray_Empty():
 
 def Segment3DArray_One(segment: Segment3D) -> Segment3DArray:
     return segment.reshape((1, 2, 3))
+
+
+PipeComponent = Annotated[Tuple[Point3D, Point3D, Point3D], "bbox_min, bbox_max, mean"]
+PipeComponentArray = Annotated[list[PipeComponent], "List of PipeComponents"]

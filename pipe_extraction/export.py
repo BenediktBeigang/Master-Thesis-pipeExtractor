@@ -64,10 +64,9 @@ def save_slice_obj(
 
 
 def write_clusters_as_obj(
-    slice_idx,
     segments,
     clusters,
-    output_dir,
+    output_path,
     z_value=0.0,
 ):
     """
@@ -78,11 +77,9 @@ def write_clusters_as_obj(
     z_value  : float                  # Z-Koordinate (2D -> setze 0.0)
     """
     segments = np.asarray(segments, dtype=float)  # (N, 2, 2) oder (N, 2, 3)
-    os.makedirs(output_dir, exist_ok=True)
-    obj_path = os.path.join(output_dir, f"slice_{slice_idx:03d}_cluster.obj")
 
     # Eine einzige OBJ-Datei für alle Cluster
-    with open(obj_path, "w", encoding="utf-8") as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         f.write("# Wavefront OBJ (Polylines)\n")
         f.write(f"# Alle Cluster, {len(clusters)} Cluster insgesamt\n")
 
@@ -327,62 +324,6 @@ def write_obj_lines(
             vert_idx += 2
 
 
-def write_segments_as_geojson(
-    segments: Segment3DArray,
-    output_path: str,
-    crs_name: str = "unknown",
-) -> None:
-    """
-    Exportiert Liniensegmente als GeoJSON-Datei.
-
-    segments : list[ ((x1,y1),(x2,y2)), ... ] oder list[ ((x1,y1,z1),(x2,y2,z2)), ... ]
-    output_path : str                    # Ausgabepfad für die GeoJSON-Datei
-    crs_name : str                      # Name des Koordinatenreferenzsystems
-    """
-    segments = np.asarray(segments, dtype=float)
-
-    # Bestimme ob 2D oder 3D Segmente
-    has_z = segments.shape[2] == 3 if len(segments) > 0 else False
-
-    # Erstelle GeoJSON-Struktur
-    geojson_data = {
-        "type": "FeatureCollection",
-        "name": "segments",
-        "features": [],
-        "crs": {"type": "name", "properties": {"name": crs_name}},
-    }
-
-    # Füge Liniensegmente als Features hinzu
-    for i, segment in enumerate(segments):
-        if has_z:  # 3D: ((x1,y1,z1),(x2,y2,z2))
-            (x1, y1, z1), (x2, y2, z2) = segment
-            coordinates = [
-                [float(x1), float(y1), float(z1)],
-                [float(x2), float(y2), float(z2)],
-            ]
-        else:  # 2D: ((x1,y1),(x2,y2))
-            (x1, y1), (x2, y2) = segment
-            coordinates = [
-                [float(x1), float(y1), 0],
-                [float(x2), float(y2), 0],
-            ]
-
-        feature = {
-            "type": "Feature",
-            "geometry": {"type": "LineString", "coordinates": coordinates},
-            "properties": {
-                "segment_index": i,
-                "has_z": True,
-            },
-        }
-
-        geojson_data["features"].append(feature)
-
-    # GeoJSON speichern
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(geojson_data, f, indent=2, ensure_ascii=False)
-
-
 def export_sample_vectors_to_obj(
     sample_data: list,
     tangential_length: float,
@@ -396,7 +337,7 @@ def export_sample_vectors_to_obj(
     - Normalenvektor (n_hat) skaliert mit normal_length
     - Resultierender Punkt (c_xy) als Punkt
     """
-    with open("./sample_vectors.obj", "w") as f:
+    with open("./output/obj/snapVectors.obj", "w") as f:
         f.write("# Sample Point Vectors Export\n")
         f.write(f"# Tangential half width: {tangential_length}\n")
         f.write(f"# Normal length: {normal_length}\n")
