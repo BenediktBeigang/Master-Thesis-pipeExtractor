@@ -1,4 +1,4 @@
-from typing import Annotated, Tuple
+from typing import Annotated, Tuple, List
 from numpy.typing import NDArray
 import numpy as np
 
@@ -16,8 +16,8 @@ def Point3DArray_One(point: Point3D) -> Point3DArray:
 
 
 # Bucket
-ListOfPoint2DArrays = Annotated[list[Point2DArray], "Each element shape: (M_i, 2)"]
-ListOfPoint3DArrays = Annotated[list[Point3DArray], "Each element shape: (M_i, 3)"]
+ListOfPoint2DArrays = Annotated[List[Point2DArray], "Each element shape: (M_i, 2)"]
+ListOfPoint3DArrays = Annotated[List[Point3DArray], "Each element shape: (M_i, 3)"]
 
 # Segment
 Segment2D = Annotated[NDArray[np.floating], "Shape: (2, 2)"]
@@ -45,4 +45,4 @@ def Segment3DArray_One(segment: Segment3D) -> Segment3DArray:
 
 
 PipeComponent = Annotated[Tuple[Point3D, Point3D, Point3D], "bbox_min, bbox_max, mean"]
-PipeComponentArray = Annotated[list[PipeComponent], "List of PipeComponents"]
+PipeComponentArray = Annotated[List[PipeComponent], "List of PipeComponents"]

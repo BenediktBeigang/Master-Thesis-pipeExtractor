@@ -65,9 +65,9 @@ def load_las(path: str, ignoreZ: bool = False, filterClass: int = None) -> np.nd
         raise RuntimeError(f"Konnte LAS nicht laden: {e}")
 
 
-def prepare_output_directory(output_dir: str):
-    subdirs_to_clean = ["obj", "geojson"]
-    if os.path.exists(output_dir):
+def prepare_output_directory(output_dir: str, clean: bool = True):
+    subdirs_to_clean = ["obj", "geojson", "metrics", "plots"]
+    if os.path.exists(output_dir) and clean:
         # Lösche spezifische Unterordner
         for subdir in subdirs_to_clean:
             subdir_path = os.path.join(output_dir, subdir)
