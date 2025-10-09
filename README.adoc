@@ -1,5 +1,7 @@
 = pipe-vector-extractor
 
+Extraction and evaluation of pipes and pipe components from segmented pointclouds.
+
 .pipeExtraction.py
 Trys to find vectors based on two points of the segemented pointcloud, that have a lot of points in between. 
 Creates a `xxx_all_pipes.json` file with the vectors and a `xxx_all_pipes.obj` file with the 3D representation of the pipes.
