@@ -41,7 +41,7 @@ def componentEval(ground_truth, detected_components, pointcloudName):
         "distance_z_samples": z_distances,
     }
 
-    with open(f"./output/metrics/{pointcloudName}_pipes.json", "w") as f:
+    with open(f"./output/metrics/{pointcloudName}_components.json", "w") as f:
         json.dump(result, f, indent=2)
 
     plot_boxplots_lineDistances(
