@@ -1,4 +1,5 @@
-from custom_types import Segment3D
+import numpy as np
+from custom_types import Point3D, Segment3D
 from eval.util import _dot, _norm, point_to_segment_distance_xy, _sub
 
 
@@ -75,3 +76,35 @@ def is_segment_in_tolerance(seg1: Segment3D, seg2: Segment3D, tolerance: float) 
     dist_b2_to_seg1 = point_to_segment_distance_xy(b2, a1, b1)
 
     return dist_a2_to_seg1 <= tolerance and dist_b2_to_seg1 <= tolerance
+
+
+def is_component_in_tolerance(
+    comp1: Point3D, comp2: Point3D, tolerance: float
+) -> tuple[bool, float | None, float | None]:
+    """
+    Prüft, ob zwei Komponenten (Punkte) innerhalb der XY-Toleranz liegen.
+
+    Args:
+        comp1: Erstes Komponenten-Punkt (x, y, z)
+        comp2: Zweites Komponenten-Punkt (x, y, z)
+        tolerance: Maximal zulässiger Abstand in der XY-Ebene
+
+    Returns:
+        Tuple[bool, float | None, float | None]:
+            - bool: True, wenn XY-Abstand <= Toleranz
+            - float | None: XY-Abstand (None, falls außerhalb der Toleranz)
+            - float | None: Absoluter Z-Abstand (None, falls außerhalb der Toleranz)
+    """
+    comp1 = np.asarray(comp1, dtype=float)
+    comp2 = np.asarray(comp2, dtype=float)
+    xy_vec = (
+        comp2[0] - comp1[0],
+        comp2[1] - comp1[1],
+        0.0,
+    )
+    xy_distance = _norm(xy_vec)
+    if xy_distance > tolerance:
+        return False, None, None
+
+    z_distance = abs(comp2[2] - comp1[2])
+    return True, xy_distance, z_distance

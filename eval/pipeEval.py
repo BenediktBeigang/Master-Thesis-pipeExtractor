@@ -1,8 +1,8 @@
 import json
 import numpy as np
 from eval.pipeMetrics import pipe_detection_metric
+from eval.plots.distancePlot import plot_boxplots_lineDistances
 from eval.plots.pipeClassPlot import plot_segmentClasses
-from eval.plots.pipeDistancePlot import plot_boxplots_lineDistances
 
 
 def pipeEval(ground_truth, detected_pipes, pointcloudName):
@@ -48,7 +48,9 @@ def pipeEval(ground_truth, detected_pipes, pointcloudName):
     plot_boxplots_lineDistances(
         line_dist_xy_samples,
         line_dist_z_samples,
-        out_png=f"./output/plots/{pointcloudName}_boxplot.png",
+        out_png=f"./output/plots/{pointcloudName}_boxplot_pipes.png",
+        part="Endpunkte",
+        title="Abstände der erkannten Rohre zu den Ground Truth Rohren",
         show=False,
     )
 

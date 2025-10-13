@@ -352,6 +352,11 @@ def process_single_segment(
         )
 
     snapped_segments = extract_segments(
-        np.array(snapped_points_chain), args["samples_per_meter"]
+        np.array(snapped_points_chain),
+        samples_per_meter=args["samples_per_meter"],
+        max_angle_change_deg=args["max_angle_change_deg"],
+        ransac_residual_threshold=args["ransac_residual_threshold"],
+        min_points_per_bucket=args["min_points_per_bucket"],
+        merge_jump_threshold=args["merge_jump_threshold"],
     )
     return np.vstack([Segment3DArray_Empty(), snapped_segments]), sample_data

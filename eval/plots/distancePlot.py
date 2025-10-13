@@ -7,6 +7,8 @@ def plot_boxplots_lineDistances(
     line_dist_xy_samples: Optional[Sequence[float]],
     line_dist_z_samples: Optional[Sequence[float]],
     out_png: Optional[str],
+    part: str,
+    title: str,
     show: bool = False,
 ) -> None:
     """
@@ -30,11 +32,11 @@ def plot_boxplots_lineDistances(
 
     if line_z_arr.size > 0:
         data.append(line_z_arr)
-        labels.append("Abstände der\nEndpunkte z")
+        labels.append(f"Abstände der\n{part} z")
 
     if line_xy_arr.size > 0:
         data.append(line_xy_arr)
-        labels.append("Abstände der\nEndpunkte xy")
+        labels.append(f"Abstände der\n{part} xy")
 
     if not data:
         raise ValueError("Keine Daten zum Plotten gefunden.")
@@ -50,7 +52,7 @@ def plot_boxplots_lineDistances(
         whis=1.5,
         widths=0.6,
     )
-    ax.set_title("Abstände der erkannten Segmente zu den Ground Truth Segmenten")
+    ax.set_title(title)
     ax.set_xlabel("Abstand [m]")
     ax.grid(True, axis="x", linestyle="--", linewidth=0.5)
 
@@ -103,7 +105,9 @@ def plot_boxplots_lineDistances(
     ]
     ax.legend(
         handles=legend_elements,
-        loc="upper right",
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1),
+        borderaxespad=0.0,
         frameon=True,
         fancybox=True,
         shadow=True,

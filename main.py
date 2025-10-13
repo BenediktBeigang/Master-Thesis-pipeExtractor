@@ -4,9 +4,10 @@ from custom_types import Segment3DArray
 from util import load_las, prepare_output_directory
 from export_geojson import export_geojson
 from eval.pipeEval import pipeEval
+from eval.componentEval import componentEval
 from eval.load_geojson import load_geojson
-from pipeComponent_extraction.armatureExtraction import extract_pipeComponents
 from pipe_extraction.pipe_extraction_hough_parallel import extract_pipes
+from pipeComponent_extraction.pipeComponentExtraction import extract_pipeComponents
 
 
 def main():
@@ -24,7 +25,7 @@ def main():
     prepare_output_directory("./output/", clean=False)
     pointcloudName = os.path.basename(args.input).split(".")[0]
 
-    if False:
+    if True:
         print("#######################")
         print("### Pipe Extraction ###")
         print("#######################")
@@ -42,6 +43,7 @@ def main():
         xyz_pipeComponents = load_las(args.input, ignoreZ=False, filterClass=2)
         pipeComponents = extract_pipeComponents(
             xyz=xyz_pipeComponents,
+            config_path=args.config_path,
             pipes=pipes,
             pointcloudName=pointcloudName,
             near_pipe_filter=True,
@@ -64,6 +66,7 @@ def main():
         detected_pipes, detected_components = load_geojson(result_pipes[0])
 
         pipeEval(ground_truth_pipes, detected_pipes, pointcloudName)
+        componentEval(ground_truth_components, detected_components, pointcloudName)
 
 
 if __name__ == "__main__":

@@ -19,8 +19,9 @@ def _buckets_by_delta_z(
     points_3D_chain: Point3DArray,
     samples_per_meter: float,
     max_angle_change_deg: float,
-    min_points_per_bucket: int = 2,
-    merge_jump_threshold: float = 3.0,
+    min_points_per_bucket: int,
+    merge_jump_threshold: float,
+    big=False,
 ) -> ListOfPoint3DArrays:
     """
     Groups a chain of 3D points into buckets based on z-coordinate differences.
@@ -80,7 +81,7 @@ def _buckets_by_delta_z(
 
         # Bei Richtungswechsel neuen Bucket starten
         if abs(current_dz - mean_dz) > deltaZ_threshold:
-            if len(current) >= min_points_per_bucket:
+            if len(current) >= 2:
                 buckets.append(np.array(current))
 
             # Neuer Bucket mit Überlappung
@@ -93,6 +94,32 @@ def _buckets_by_delta_z(
     # Add last bucket
     if len(current) >= min_points_per_bucket:
         buckets.append(np.array(current))
+
+    if big:
+        import matplotlib.pyplot as plt
+
+        plt.figure(figsize=(10, 4))
+        cmap = plt.get_cmap("tab10")
+        start_idx = 0
+        for idx, bucket in enumerate(buckets):
+            x_vals = np.arange(start_idx, start_idx + len(bucket))
+            plt.plot(
+                x_vals,
+                bucket[:, 2],
+                marker="o",
+                linestyle="-",
+                color=cmap(idx % 10),
+                label=f"Bucket {idx + 1}",
+            )
+            start_idx += len(bucket)
+        plt.xlabel("Index im Bucket")
+        plt.ylabel("Z-Wert")
+        plt.title(
+            f"Z-Verlauf nach Buckets, {points_3D_chain[0]} ... {points_3D_chain[-1]}"
+        )
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
     # Ignore all buckets that:
     # - have less than min_points_per_bucket
@@ -200,8 +227,10 @@ def fit_ransac_line_and_project_endpoints(
 def extract_segments(
     points_3D: Point3DArray,
     samples_per_meter: float,
-    max_angle_change_deg: float = 15.0,
-    ransac_residual_threshold: float = 0.05,
+    max_angle_change_deg: float,
+    ransac_residual_threshold: float,
+    min_points_per_bucket: int,
+    merge_jump_threshold: float,
 ) -> Segment3DArray:
     """
     Extracts 3D line segments from a chain of 3D points by clustering points based on their Z-coordinates and fitting lines using RANSAC.
@@ -242,6 +271,8 @@ def extract_segments(
         points_3D,
         samples_per_meter,
         max_angle_change_deg=max_angle_change_deg,
+        min_points_per_bucket=min_points_per_bucket,
+        merge_jump_threshold=merge_jump_threshold,
     )
 
     # buckets = _buckets_by_dbscan_z(

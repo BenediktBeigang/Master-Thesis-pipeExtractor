@@ -1,3 +1,6 @@
+from custom_types import Point3DArray
+
+
 def write_segments_to_obj(
     missed_segments: list,
     false_positive_segments: list,
@@ -96,3 +99,22 @@ def export_segments_to_obj(segments, output_path):
             vertex_index += 2
 
         f.write(f"\n# Total segments: {len(segments)}\n")
+
+
+def export_points_to_obj(points: Point3DArray, output_path: str):
+    """
+    Exportiert eine Liste von 3D-Punkten als OBJ-Datei.
+
+    Args:
+        points (list): Liste von Punkten, z.B. [(x, y, z), ...].
+        output_path (str): Pfad zur Ausgabe-OBJ-Datei.
+    """
+    with open(output_path, "w") as f:
+        f.write("# OBJ file generated from 3D points\n\n")
+
+        for point in points:
+            if len(point) == 2:
+                point = (point[0], point[1], 0.0)
+            f.write(f"v {point[0]} {point[1]} {point[2]}\n")
+
+        f.write(f"\n# Total points: {len(points)}\n")
