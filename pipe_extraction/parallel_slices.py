@@ -1,7 +1,4 @@
-# parallel_slices.py
-import os
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import shared_memory, get_context
+from multiprocessing import shared_memory
 import numpy as np
 from util import load_config
 
@@ -34,6 +31,11 @@ def worker_process_slice(task, config_path):
 
     slice_idx, z_center, zmin, zmax = task
 
+    if _XYZ is None:
+        raise RuntimeError(
+            f"Shared memory not initialized in worker process for slice {slice_idx}"
+        )
+
     config = load_config(config_path)
     args = config["slice_cluster_and_merge"]
 
@@ -41,7 +43,7 @@ def worker_process_slice(task, config_path):
     segments_world = find_lines_in_slice(
         _XYZ, z_center, zmin, zmax, config["hough"], slice_idx
     )
-    if not segments_world:
+    if len(segments_world) == 0:
         return (slice_idx, [])
 
     # Lokales Clustering

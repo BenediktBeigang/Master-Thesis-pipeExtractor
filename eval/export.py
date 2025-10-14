@@ -14,51 +14,53 @@ def write_segments_to_obj(
         false_positive_segments: Liste von Detection Segmenten die keine Ground Truth entsprechen
         output_path: Pfad zur Ausgabe-OBJ-Datei
     """
-    with open(f"./output/obj/{pointcloudName}_missed.obj", "w") as f:
-        f.write("# OBJ file with missed and false positive segments\n")
-        f.write("# Red lines: Missed segments (Ground Truth not detected)\n")
-        f.write(
-            "# Blue lines: False positive segments (Detections without Ground Truth)\n\n"
-        )
+    if len(missed_segments) > 0:
+        with open(f"./output/obj/{pointcloudName}_missed.obj", "w") as f:
+            f.write("# OBJ file with missed and false positive segments\n")
+            f.write("# Red lines: Missed segments (Ground Truth not detected)\n")
+            f.write(
+                "# Blue lines: False positive segments (Detections without Ground Truth)\n\n"
+            )
 
-        vertex_index = 1
+            vertex_index = 1
 
-        # Schreibe missed segments (rot)
-        if missed_segments:
-            f.write("# Missed segments (red)\n")
+            # Schreibe missed segments (rot)
+            if missed_segments:
+                f.write("# Missed segments (red)\n")
 
-            for segment in missed_segments:
-                p1, p2 = segment
-                # Schreibe Vertices
-                f.write(f"v {p1[0]:.6f} {p1[1]:.6f} {p1[2]:.6f}\n")
-                f.write(f"v {p2[0]:.6f} {p2[1]:.6f} {p2[2]:.6f}\n")
-                # Schreibe Linie
-                f.write(f"l {vertex_index} {vertex_index + 1}\n")
-                vertex_index += 2
+                for segment in missed_segments:
+                    p1, p2 = segment
+                    # Schreibe Vertices
+                    f.write(f"v {p1[0]:.6f} {p1[1]:.6f} {p1[2]:.6f}\n")
+                    f.write(f"v {p2[0]:.6f} {p2[1]:.6f} {p2[2]:.6f}\n")
+                    # Schreibe Linie
+                    f.write(f"l {vertex_index} {vertex_index + 1}\n")
+                    vertex_index += 2
 
-            f.write("\n")
+                f.write("\n")
 
-    with open(f"./output/obj/{pointcloudName}_falsePositive.obj", "w") as f:
-        f.write("# OBJ file with missed and false positive segments\n")
-        f.write("# Red lines: Missed segments (Ground Truth not detected)\n")
-        f.write(
-            "# Blue lines: False positive segments (Detections without Ground Truth)\n\n"
-        )
+    if len(false_positive_segments) > 0:
+        with open(f"./output/obj/{pointcloudName}_falsePositive.obj", "w") as f:
+            f.write("# OBJ file with missed and false positive segments\n")
+            f.write("# Red lines: Missed segments (Ground Truth not detected)\n")
+            f.write(
+                "# Blue lines: False positive segments (Detections without Ground Truth)\n\n"
+            )
 
-        vertex_index = 1
+            vertex_index = 1
 
-        # Schreibe false positive segments (blau)
-        if false_positive_segments:
-            f.write("# False positive segments (blue)\n")
+            # Schreibe false positive segments (blau)
+            if false_positive_segments:
+                f.write("# False positive segments (blue)\n")
 
-            for segment in false_positive_segments:
-                p1, p2 = segment
-                # Schreibe Vertices
-                f.write(f"v {p1[0]:.6f} {p1[1]:.6f} {p1[2]:.6f}\n")
-                f.write(f"v {p2[0]:.6f} {p2[1]:.6f} {p2[2]:.6f}\n")
-                # Schreibe Linie
-                f.write(f"l {vertex_index} {vertex_index + 1}\n")
-                vertex_index += 2
+                for segment in false_positive_segments:
+                    p1, p2 = segment
+                    # Schreibe Vertices
+                    f.write(f"v {p1[0]:.6f} {p1[1]:.6f} {p1[2]:.6f}\n")
+                    f.write(f"v {p2[0]:.6f} {p2[1]:.6f} {p2[2]:.6f}\n")
+                    # Schreibe Linie
+                    f.write(f"l {vertex_index} {vertex_index + 1}\n")
+                    vertex_index += 2
 
 
 def export_segments_to_obj(segments, output_path):
@@ -70,6 +72,9 @@ def export_segments_to_obj(segments, output_path):
                         Jeder Punkt ist ein Tupel (x, y, z) oder (x, y).
         output_path (str): Pfad zur Ausgabe-OBJ-Datei
     """
+    if len(segments) == 0:
+        return
+
     with open(output_path, "w") as f:
         # OBJ Header
         f.write("# OBJ file generated from GeoJSON segments\n")
@@ -109,6 +114,9 @@ def export_points_to_obj(points: Point3DArray, output_path: str):
         points (list): Liste von Punkten, z.B. [(x, y, z), ...].
         output_path (str): Pfad zur Ausgabe-OBJ-Datei.
     """
+    if len(points) == 0:
+        return
+
     with open(output_path, "w") as f:
         f.write("# OBJ file generated from 3D points\n\n")
 

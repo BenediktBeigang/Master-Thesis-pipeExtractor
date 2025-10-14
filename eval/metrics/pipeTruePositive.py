@@ -43,10 +43,10 @@ def is_segment_in_tolerance(seg1: Segment3D, seg2: Segment3D, tolerance: float) 
     a2, b2 = seg2
 
     # Projiziere alle Punkte auf XY-Ebene
-    a1_xy = (a1[0], a1[1], 0.0)
-    b1_xy = (b1[0], b1[1], 0.0)
-    a2_xy = (a2[0], a2[1], 0.0)
-    b2_xy = (b2[0], b2[1], 0.0)
+    a1_xy = np.array([a1[0], a1[1], 0.0])
+    b1_xy = np.array([b1[0], b1[1], 0.0])
+    a2_xy = np.array([a2[0], a2[1], 0.0])
+    b2_xy = np.array([b2[0], b2[1], 0.0])
 
     # Berechne Segmentlängen in XY
     len1 = _norm(_sub(b1_xy, a1_xy))

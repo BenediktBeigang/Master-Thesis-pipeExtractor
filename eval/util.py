@@ -60,9 +60,9 @@ def point_to_segment_distance_xy(p: Point3D, a: Point3D, b: Point3D) -> float:
     Wenn die Projektion außerhalb des Segments liegt, wird der Abstand zum nächsten Endpunkt zurückgegeben.
     """
     # Projiziere alle Punkte auf XY-Ebene
-    p_xy = (p[0], p[1], 0.0)
-    a_xy = (a[0], a[1], 0.0)
-    b_xy = (b[0], b[1], 0.0)
+    p_xy = np.array([p[0], p[1], 0.0])
+    a_xy = np.array([a[0], a[1], 0.0])
+    b_xy = np.array([b[0], b[1], 0.0])
 
     ab = _sub(b_xy, a_xy)
     ab_norm_sq = _dot(ab, ab)

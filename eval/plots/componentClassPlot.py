@@ -29,7 +29,7 @@ def plot_componentClasses(
 
     # ---------- Figure (nur Counts) ----------
     fig, ax_counts = plt.subplots(
-        figsize=(12, 4),
+        figsize=(12, 3),
         constrained_layout=True,
     )
 

@@ -12,8 +12,33 @@ def mean_z_height(segment):
 
 
 def merge_segments_in_clusters(
-    segments: Segment3DArray, clusters, gap_threshold, min_length
+    segments: Segment3DArray,
+    clusters,
+    gap_threshold: float,
+    min_length: float,
 ) -> Segment3DArray:
+    """
+    Merge 3D line segments per cluster after aligning them with the dominant cluster axis.
+
+    ## How it works
+    The function computes a mean XY direction per cluster, projects
+    segments onto that axis, merges overlapping intervals using the gap threshold, filters
+    short results, and reconstructs 3D segments with averaged Z coordinates.
+
+    Parameters
+    ----------
+    segments : Segment3DArray
+        Input array of shape (N, 2, 3) containing 3D segments.
+    clusters : Mapping from cluster id to iterable of segment indices belonging to the cluster.
+    gap_threshold : float
+        Maximum allowed gap along the axis before starting a new merged segment.
+    min_length : float
+        Minimum length along the axis required for a merged segment to be kept.
+
+    Returns
+    -------
+    A NumPy array of merged 3D segments with shape (M, 2, 3).
+    """
     if len(segments) == 0:
         return np.empty((0, 2, 3), dtype=np.float64)
 

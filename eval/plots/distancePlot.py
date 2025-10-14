@@ -1,5 +1,6 @@
 from typing import Optional, Sequence
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 
 
@@ -46,7 +47,7 @@ def plot_boxplots_lineDistances(
     bp = ax.boxplot(
         data,
         vert=False,
-        labels=labels,
+        tick_labels=labels,
         showmeans=True,
         meanline=False,
         whis=1.5,
@@ -56,24 +57,32 @@ def plot_boxplots_lineDistances(
     ax.set_xlabel("Abstand [m]")
     ax.grid(True, axis="x", linestyle="--", linewidth=0.5)
 
-    max_dist = max(max(line_dist_xy_samples), max(line_dist_z_samples))
+    max_dist = max(
+        max(line_xy_arr) if line_xy_arr.size > 0 else 0,
+        max(line_z_arr) if line_z_arr.size > 0 else 0,
+    )
 
     # X-Achsen-Range und Ticks setzen
     ax.set_xlim(-0.05, max_dist + 0.05)
-    ax.set_xticks(np.arange(-0.05, max_dist + 0.05, 0.05))
-    ax.set_xticklabels(
-        [
-            f"{x:.2f}" if round(x, 2) % 0.25 == 0 else ""
-            for x in np.arange(-0.05, max_dist + 0.05, 0.05)
-        ]
-    )  # Labels nur alle 0.25
+    ticks = np.arange(-0.05, max_dist + 0.05, 0.05)
+    ax.set_xticks(ticks)
+
+    # Entscheidung über Tick-Beschriftung basierend auf max_dist
+    if max_dist < 0.25:
+        # Alle Ticks beschriften, wenn der höchste Wert unter 0.25 ist
+        ax.set_xticklabels([f"{x:.2f}" for x in ticks])
+    else:
+        # Nur jeden 5. Tick (alle 0.25) beschriften
+        ax.set_xticklabels(
+            [f"{x:.2f}" if round(x, 2) % 0.25 == 0 else "" for x in ticks]
+        )
 
     if "Overlap" in " ".join(labels):
         ax.set_ylim(bottom=0.0)
 
     # Legende für Boxplot-Elemente hinzufügen
     legend_elements = [
-        plt.Line2D(
+        Line2D(
             [0],
             [0],
             color="orange",
@@ -81,7 +90,7 @@ def plot_boxplots_lineDistances(
             markersize=8,
             label="Median",
         ),
-        plt.Line2D(
+        Line2D(
             [0],
             [0],
             color="green",
@@ -90,9 +99,9 @@ def plot_boxplots_lineDistances(
             markersize=8,
             label="Mittelwert",
         ),
-        plt.Line2D([0], [0], color="black", linewidth=1, label="Box (Q1-Q3)"),
-        plt.Line2D([0], [0], color="black", linewidth=1, label="Whiskers (1.5×IQR)"),
-        plt.Line2D(
+        Line2D([0], [0], color="black", linewidth=1, label="Box (Q1-Q3)"),
+        Line2D([0], [0], color="black", linewidth=1, label="Whiskers (1.5×IQR)"),
+        Line2D(
             [0],
             [0],
             marker="o",

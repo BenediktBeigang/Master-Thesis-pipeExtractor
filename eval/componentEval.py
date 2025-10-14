@@ -44,14 +44,15 @@ def componentEval(ground_truth, detected_components, pointcloudName):
     with open(f"./output/metrics/{pointcloudName}_components.json", "w") as f:
         json.dump(result, f, indent=2)
 
-    plot_boxplots_lineDistances(
-        xy_distances,
-        z_distances,
-        out_png=f"./output/plots/{pointcloudName}_boxplot_components.png",
-        part="Rohrbauteile",
-        title="Abstände der erkannten Rohrbauteile zu den Ground Truth Rohrbauteilen",
-        show=False,
-    )
+    if len(xy_distances) > 0 or len(z_distances) > 0:
+        plot_boxplots_lineDistances(
+            xy_distances,
+            z_distances,
+            out_png=f"./output/plots/{pointcloudName}_boxplot_components.png",
+            part="Rohrbauteile",
+            title="Abstände der erkannten Rohrbauteile zu den Ground Truth Rohrbauteilen",
+            show=False,
+        )
 
     plot_componentClasses(
         found,

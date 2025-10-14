@@ -1,0 +1,13 @@
+name: pipe-extraction
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.13
+  - numpy=2.3.3
+  - pandas=2.3.3
+  - laspy=2.6.1
+  - scikit-learn=1.7.2
+  - scikit-image=0.25.2
+  - matplotlib=3.10.6
+  - scipy=1.16.2

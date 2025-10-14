@@ -215,7 +215,7 @@ def save_slice_images(
         binary,
         cmap="gray",
         origin="lower",
-        extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
+        extent=(x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]),
     )
 
     # Zeichne die gefundenen Liniensegmente
@@ -257,7 +257,7 @@ def save_slice_images(
         hough_space,
         cmap="hot",
         origin="lower",
-        extent=[np.rad2deg(theta[0]), np.rad2deg(theta[-1]), d[0], d[-1]],
+        extent=(np.rad2deg(theta[0]), np.rad2deg(theta[-1]), d[0], d[-1]),
         aspect="auto",
     )
 
@@ -328,6 +328,7 @@ def export_sample_vectors_to_obj(
     sample_data: list,
     tangential_length: float,
     normal_length: float,
+    pointcloudName: str,
 ):
     """
     Exportiert Sample-Point-Vektoren in eine OBJ-Datei.
@@ -337,7 +338,7 @@ def export_sample_vectors_to_obj(
     - Normalenvektor (n_hat) skaliert mit normal_length
     - Resultierender Punkt (c_xy) als Punkt
     """
-    with open("./output/obj/snapVectors.obj", "w") as f:
+    with open(f"./output/obj/{pointcloudName}_snapVectors.obj", "w") as f:
         f.write("# Sample Point Vectors Export\n")
         f.write(f"# Tangential half width: {tangential_length}\n")
         f.write(f"# Normal length: {normal_length}\n")

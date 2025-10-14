@@ -46,7 +46,7 @@ def pipe_detection_metric(
     detected_segments: List[Segment3D],
     pointcloudName: str,
     tolerance: float = 0.5,
-) -> Tuple[int, int, int, int, List[float], List[float], List[float], float, float]:
+) -> Tuple[int, int, int, int, List[float], List[float], float, float, float]:
     """
     Berechnet Metriken zur Bewertung der Erkennung von Liniensegmenten.
 

@@ -1,6 +1,6 @@
 import argparse
 import os
-from custom_types import Segment3DArray
+from custom_types import PipeComponentArray
 from util import load_las, prepare_output_directory
 from export_geojson import export_geojson
 from eval.pipeEval import pipeEval
@@ -30,7 +30,7 @@ def main():
         print("### Pipe Extraction ###")
         print("#######################")
         xyz_pipes = load_las(args.input, ignoreZ=False, filterClass=1)
-        pipes: Segment3DArray = extract_pipes(
+        pipes, snapped_chains = extract_pipes(
             xyz=xyz_pipes,
             config_path=args.config_path,
             pointcloudName=pointcloudName,
@@ -41,16 +41,19 @@ def main():
         print("### Pipe Component Extraction ###")
         print("#################################")
         xyz_pipeComponents = load_las(args.input, ignoreZ=False, filterClass=2)
-        pipeComponents = extract_pipeComponents(
+        pipeComponents: PipeComponentArray | None = extract_pipeComponents(
             xyz=xyz_pipeComponents,
             config_path=args.config_path,
             pipes=pipes,
             pointcloudName=pointcloudName,
+            apply_poisson=True,
+            poisson_radius=0.02,
             near_pipe_filter=True,
         )
 
         export_geojson(
             pipes,
+            snapped_chains,
             pipeComponents,
             f"./output/geojson/{pointcloudName}.geojson",
         )
@@ -60,10 +63,18 @@ def main():
         print("########################")
         print("### Pipe Evaluation  ###")
         print("########################")
-        ground_truth = ["../Master-Thesis/poiExtraction/ontras_3_ground_truth.json"]
-        result_pipes = ["./output/geojson/ontras_3_predicted_0916_t1.geojson"]
-        ground_truth_pipes, ground_truth_components = load_geojson(ground_truth[0])
-        detected_pipes, detected_components = load_geojson(result_pipes[0])
+        ground_truth = [
+            "../Master-Thesis/poiExtraction/ontras_0_ground_truth.json",
+            "../Master-Thesis/poiExtraction/ontras_1_ground_truth.json",
+            "../Master-Thesis/poiExtraction/ontras_2_ground_truth.json",
+            "../Master-Thesis/poiExtraction/ontras_3_ground_truth.json",
+        ]
+        ground_truth_pipes, ground_truth_components, ground_truth_pipes_asChain = (
+            load_geojson(ground_truth[3])
+        )
+        detected_pipes, detected_components, detected_pipes_asChain = load_geojson(
+            f"./output/geojson/{pointcloudName}.geojson"
+        )
 
         pipeEval(ground_truth_pipes, detected_pipes, pointcloudName)
         componentEval(ground_truth_components, detected_components, pointcloudName)

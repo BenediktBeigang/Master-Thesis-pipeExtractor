@@ -1,15 +1,17 @@
 from typing import List, Tuple
-from custom_types import Point3D
+
+import numpy as np
+from custom_types import PipeComponentArray, Point3D
 from eval.export import export_points_to_obj
 from eval.metrics.pipeTruePositive import is_component_in_tolerance
 
 
 def component_detection_metric(
-    ground_truth_components: List[Point3D],
-    detected_components: List[Point3D],
+    ground_truth_components: PipeComponentArray,
+    detected_components: PipeComponentArray,
     pointcloudName: str,
     tolerance: float = 0.5,
-) -> Tuple[int, int, int, int, List[float], List[float]]:
+) -> Tuple[int, int, int, List[float], List[float]]:
     """
     Calculates detection metrics for pipe segments based on ground truth and detections.
 
@@ -56,7 +58,7 @@ def component_detection_metric(
 
         for det_idx, det in enumerate(detected_components):
             validComponent, xy_dis, z_dis = is_component_in_tolerance(
-                det, gt, tolerance
+                det[2], gt[2], tolerance
             )
 
             if validComponent:
@@ -64,8 +66,8 @@ def component_detection_metric(
                 label = "found" if label == "not_found" else label
 
                 # XY/Z-Distanzen sammeln
-                xy_distances.append(xy_dis)
-                z_distances.append(z_dis)
+                xy_distances.append(xy_dis or -1)
+                z_distances.append(z_dis or -1)
 
         match label:
             case "found":
@@ -74,12 +76,6 @@ def component_detection_metric(
                 missed += 1
 
     false_positives = len(detected_components) - len(true_positives)
-
-    matched_components = [detected_components[idx] for idx in sorted(true_positives)]
-    export_points_to_obj(
-        matched_components,
-        f"./output/obj/{pointcloudName}_detected_components.obj",
-    )
 
     return (
         found,

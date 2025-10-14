@@ -1,9 +1,10 @@
 import os
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import shared_memory, get_context
+from typing import Tuple
 import numpy as np
 from scipy.spatial import KDTree
-from custom_types import Segment3DArray, Segment3DArray_Empty
+from custom_types import Point3DArray, Segment3DArray, Segment3DArray_Empty
 from util import load_config
 
 # Globals, which are filled in the worker
@@ -64,9 +65,10 @@ def share_xyz_array(xyz: np.ndarray):
 def snap_segments_to_point_cloud_data_parallel(
     xyz: np.ndarray,
     segments: Segment3DArray,
+    pointcloudName: str,
     config_path: str,
     max_workers: int = -1,
-) -> Segment3DArray:
+) -> Tuple[Segment3DArray, list[Point3DArray]]:
     """
     Uses the approximated segments that are close to the real pipes in the pointcloud and snaps to them.
     This function is parallelized and uses shared memory to avoid copying the point cloud data to each worker.
@@ -101,6 +103,7 @@ def snap_segments_to_point_cloud_data_parallel(
     # Initialize result arrays
     out_segments: Segment3DArray = Segment3DArray_Empty()
     sample_data = []
+    segment_samples: list[list[dict]] = [[] for _ in range(len(segments))]
     total_processed = 0
 
     # Parallelization
@@ -132,6 +135,7 @@ def snap_segments_to_point_cloud_data_parallel(
                 if len(snapped_segments) > 0:
                     out_segments = np.vstack([out_segments, snapped_segments])
                 sample_data.extend(seg_sample_data)
+                segment_samples[segment_idx] = seg_sample_data
 
                 total_processed += 1
                 if total_processed % 10 == 0:
@@ -150,6 +154,20 @@ def snap_segments_to_point_cloud_data_parallel(
         sample_data,
         args["tangential_length"],
         args["normal_length"],
+        pointcloudName,
     )
 
-    return out_segments
+    snapped_chains: list[Point3DArray] = []
+    for seg_sample_data in segment_samples:
+        if not seg_sample_data:
+            snapped_chains.append(np.empty((0, 3), dtype=float))
+            continue
+        seg_points = []
+        for sample in seg_sample_data:
+            c_xy = np.asarray(sample["c_xy"]).reshape(-1)
+            if c_xy.shape[0] != 2:
+                raise ValueError("c_xy muss 2 Elemente enthalten.")
+            seg_points.append([c_xy[0], c_xy[1], sample["z"]])
+        snapped_chains.append(np.asarray(seg_points, dtype=float))
+
+    return out_segments, snapped_chains

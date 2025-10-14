@@ -70,20 +70,43 @@ def filter_points_by_pipe_distance_vectorized(
     distance_threshold: float = 1.0,
     ignore_z: bool = False,
     chunk_size: int = 200_000,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> np.ndarray:
     """
-    Vectorized filter using chunking. Returns (kept_points, kept_indices).
-    Accepts pipes as:
-      - ndarray (M,6) columns [p1x,p1y,p1z,p2x,p2y,p2z]
-      - structured ndarray with fields 'p1_x' etc.
-      - iterable of dicts with those keys
+    Filters points by their distance to pipe segments using vectorized operations.
+
+    ## How it works
+    1. Normalizes pipes to start/end point arrays
+    2. Processes points in chunks to manage memory usage
+    3. Calculates minimum distance from each point to all pipe segments
+
+    Parameters
+    ----------
+    points : np.ndarray
+        Array of 3D points with shape (N, 3) where each row is [x, y, z]
+    pipes : Segment3DArray
+        Array of pipe segments with shape (M, 2, 3) where each segment
+        contains start and end points [[x1,y1,z1], [x2,y2,z2]]
+    distance_threshold : float, optional
+        Maximum distance from pipe to keep points, by default 1.0
+    ignore_z : bool, optional
+        If True, only considers x,y coordinates for distance calculation,
+        by default False
+    chunk_size : int, optional
+        Number of points to process at once for memory management,
+        by default 200_000
+
+    Returns
+    -------
+    np.ndarray
+        Array of indices (dtype=int) for points that are within
+        distance_threshold of any pipe segment
     """
     pts_all = np.asarray(points)
     if pts_all.size == 0:
-        return np.empty((0, pts_all.shape[1])), np.empty((0,), dtype=int)
+        return np.empty((0,), dtype=int)
 
     if len(pipes) == 0:
-        return np.empty((0, pts_all.shape[1])), np.empty((0,), dtype=int)
+        return np.empty((0,), dtype=int)
 
     # Prepare arrays
     if ignore_z:
@@ -93,7 +116,7 @@ def filter_points_by_pipe_distance_vectorized(
 
     a, b = _normalize_pipes_to_arrays(pipes, ignore_z)
     if a.shape[0] == 0:
-        return np.empty((0, pts_all.shape[1])), np.empty((0,), dtype=int)
+        return np.empty((0,), dtype=int)
 
     dists = _points_to_segment_min_distances_chunked(pts, a, b, chunk_size=chunk_size)
     mask = dists < float(distance_threshold)

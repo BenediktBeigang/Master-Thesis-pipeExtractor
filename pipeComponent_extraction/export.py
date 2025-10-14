@@ -1,8 +1,11 @@
-def write_obj_boxes(cluster_boxes, output_path):
+from custom_types import PipeComponentArray
+
+
+def write_obj_pipeComponents(components: PipeComponentArray, output_path):
     try:
         lines = []
         vert_count = 0
-        for label, (mins, maxs) in cluster_boxes.items():
+        for mins, maxs, centroid in components:
             xmin, ymin, zmin = mins
             xmax, ymax, zmax = maxs
             verts = [
@@ -18,19 +21,35 @@ def write_obj_boxes(cluster_boxes, output_path):
             for v in verts:
                 lines.append(f"v {v[0]} {v[1]} {v[2]}")
 
-            # Kanten der Bounding Box als Linien
+            centroid_index = vert_count + len(verts) + 1
+            lines.append(f"v {centroid[0]} {centroid[1]} {centroid[2]}")
+            lines.append(f"p {centroid_index}")
+
+            eps = 0.01
+            cross_verts = [
+                (centroid[0] - eps, centroid[1], centroid[2]),
+                (centroid[0] + eps, centroid[1], centroid[2]),
+                (centroid[0], centroid[1] - eps, centroid[2]),
+                (centroid[0], centroid[1] + eps, centroid[2]),
+                (centroid[0], centroid[1], centroid[2] - eps),
+                (centroid[0], centroid[1], centroid[2] + eps),
+            ]
+            for v in cross_verts:
+                lines.append(f"v {v[0]} {v[1]} {v[2]}")
+            cross_start = centroid_index + 1
+            cross_edges = [(0, 1), (2, 3), (4, 5)]
+            for a, b in cross_edges:
+                lines.append(f"l {cross_start + a} {cross_start + b}")
+
             edges = [
-                # Untere Fläche (z = zmin)
                 (0, 1),
                 (1, 2),
                 (2, 3),
                 (3, 0),
-                # Obere Fläche (z = zmax)
                 (4, 5),
                 (5, 6),
                 (6, 7),
                 (7, 4),
-                # Vertikale Kanten
                 (0, 4),
                 (1, 5),
                 (2, 6),
@@ -39,7 +58,7 @@ def write_obj_boxes(cluster_boxes, output_path):
             for a, b in edges:
                 lines.append(f"l {vert_count + a + 1} {vert_count + b + 1}")
 
-            vert_count += 8
+            vert_count += len(verts) + 1 + len(cross_verts)
         with open(output_path, "w") as f:
             f.write("\n".join(lines))
     except Exception as e:

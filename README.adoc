@@ -1,30 +1,51 @@
 = pipe-vector-extractor
 
-Extraction and evaluation of pipes and pipe components from segmented pointclouds.
+Extraction and evaluation of pipe segments and pipe components from classified point clouds.
 
-.pipeExtraction.py
-Trys to find vectors based on two points of the segemented pointcloud, that have a lot of points in between. 
-Creates a `xxx_all_pipes.json` file with the vectors and a `xxx_all_pipes.obj` file with the 3D representation of the pipes.
-The `.obj` can be used in CloudCompare to visualize the pipes.
+== Project overview
 
-.armatureExtraction.py:
-Tries to find clusters of points in the segemented pointcloud, based on their distance to each other.
-If activated it also can take into account the distance to the found pipes (pipeExtraction).
-Creates a `xxx_cluster.json` file with the clusters and a `xxx_cluster_boxes.obj` file with bounding boxes for visualization in CloudCompare.
+* **Pipe extraction** through Hough-based slicing, clustering, and snapping: see link:pipe_extraction/pipe_extraction_hough_parallel.py[`pipe_extraction.pipe_extraction_hough_parallel.extract_pipes`].
+* **Pipe component extraction** in pipe neighbourhoods: link:pipeComponent_extraction/pipeComponentExtraction.py[`pipeComponent_extraction.pipeComponentExtraction.extract_pipeComponents`].
+* **Evaluation & visualization** of metrics, plots, and OBJ/GeoJSON exports orchestrated by link:main.py[`main.main`].
 
-== Installation via Conda
+[cols="1,3",options="header"]
+|===
+| Stage | Description
+| Preprocessing | Load point cloud, initialise output directories (`prepare_output_directory` in link:util.py[`util.py`]).
+| Phase 1: Approximation | Slice in Z, detect lines via Hough (`find_lines_in_slice` in link:pipe_extraction/calcSlice.py[`pipe_extraction/calcSlice.py`]).
+| Phase 1b: Clustering & merging | Cluster Hough segments with DBSCAN (`cluster_segments`), merge segments (`merge_segments_in_clusters`).
+| Phase 2: Snapping | Refine approximated pipes against raw points (`snap_segments_to_point_cloud_data_parallel`).
+| Components | Use pipes to guide component clustering (`extract_pipeComponents`).
+| Evaluation | Measure coverage and error (`pipeEval`, `componentEval`), render visualisations.
+|===
 
-Use conda to create a new environment with all required packages.
+== Installation and usage
 
-[source, bash]
+[source,bash]
 ----
-conda create -n poiExtraction-env -c conda-forge -y python=3.12 scikit-learn numpy pandas laspy pyntcloud
-conda activate poiExtraction-env
-----
-
-.Package Installation via Conda
-[source, bash]
-----
-conda create -n pipe-extraction -c conda-forge python=3.13 laspy scikit-image scikit-learn matplotlib numpy -y
+conda env create -f environment.yml
 conda activate pipe-extraction
+
+python main.py --input <filename>.las [--config_path <config>.json]
 ----
+
+== Configuration
+
+All pipeline parameters live in link:config.json[`config.json`]:
+
+* `slice_thickness`, `hough` control slice generation and Hough detection.
+* `global_cluster_and_merge` sets DBSCAN epsilon, minimum samples, and gap thresholds for global merging.
+* `slice_cluster_and_merge` provides slice-specific clustering and merge settings.
+* `snapping` governs sampling density, bounding boxes, and RANSAC fitting.
+
+== Outputs
+
+* `output/obj/*.obj` — approximated and snapped pipe segments plus bounding boxes.
+* `output/geojson/*.geojson` — combined pipes and components via link:export_geojson.py[`export_geojson.export_geojson`].
+* `output/metrics/*.json` — pipe and component metrics from link:eval/pipeEval.py[`eval.pipeEval.pipeEval`] and link:eval/componentEval.py[`eval.componentEval.componentEval`].
+* `output/plots/*.png` — bar/box plots from link:eval/plots/pipeClassPlot.py[`eval.plots.pipeClassPlot.plot_segmentClasses`] and link:eval/plots/componentClassPlot.py[`eval.plots.componentClassPlot.plot_componentClasses`].
+
+== Development notes
+
+* Type hints in link:custom_types.py[`custom_types.py`] document NumPy shapes and structures.
+* Experiments, prototypes and old code in link:experiments[`experiments/`]

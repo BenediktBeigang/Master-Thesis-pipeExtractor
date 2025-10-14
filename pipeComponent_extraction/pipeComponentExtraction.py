@@ -1,9 +1,9 @@
 from typing import Optional, Tuple, Union
 import numpy as np
-from sklearn.cluster import HDBSCAN
+from sklearn.cluster import HDBSCAN  # type: ignore
 import time
 from custom_types import PipeComponentArray, Point3D, Segment3DArray
-from pipeComponent_extraction.export import write_obj_boxes
+from pipeComponent_extraction.export import write_obj_pipeComponents
 from pipeComponent_extraction.filter import filter_points_by_pipe_distance_vectorized
 from util import load_config
 
@@ -42,18 +42,87 @@ def _nearest_pipe_info(point_xy: Point3D, pipes: Segment3DArray) -> Tuple[float,
     return best_dist, best_z
 
 
+def poisson_disk_on_points_xy(xy: np.ndarray, radius: float) -> np.ndarray:
+    if xy.size == 0:
+        return np.zeros(0, dtype=bool)
+
+    n = xy.shape[0]
+    rng = np.random.default_rng(42)
+    order = rng.permutation(n)
+
+    # cell size = radius (check 3x3 neighbors)
+    cell_size = float(radius)
+    mins = xy.min(axis=0)
+    cell_coords = np.floor((xy - mins) / cell_size).astype(np.int32)
+
+    grid: dict[tuple[int, int], list[int]] = {}
+    kept_mask = np.zeros(n, dtype=bool)
+    r2 = radius * radius
+
+    # Localize for speed
+    _cell_coords = cell_coords
+    _xy = xy
+    _grid_get = grid.get
+    _grid_setdefault = grid.setdefault
+
+    accepted = 0
+    for idx in order:
+        cc = (_cell_coords[idx, 0], _cell_coords[idx, 1])
+        found = False
+
+        # check neighbor cells (3x3)
+        cx, cy = cc
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                nb = _grid_get((cx + dx, cy + dy))
+                if not nb:
+                    continue
+                # check distances to already accepted points in that cell
+                for a_idx in nb:
+                    d2 = (_xy[a_idx, 0] - _xy[idx, 0]) ** 2 + (
+                        _xy[a_idx, 1] - _xy[idx, 1]
+                    ) ** 2
+                    if d2 < r2:
+                        found = True
+                        break
+                if found:
+                    break
+            if found:
+                break
+
+        if not found:
+            kept_mask[idx] = True
+            _grid_setdefault(cc, []).append(int(idx))
+            accepted += 1
+
+    return kept_mask
+
+
 def extract_pipeComponents(
     xyz: np.ndarray,
     config_path: str,
     pipes: Segment3DArray,
     pointcloudName: str,
+    apply_poisson: bool = False,
+    poisson_radius: float = 0.02,
     near_pipe_filter: bool = False,
-) -> PipeComponentArray:
+) -> PipeComponentArray | None:
     start_time = time.time()
     n_points = len(xyz)
 
     print(f"Load config.json...")
     config = load_config(config_path)["pipeComponent_clustering"]
+
+    # 0) Optional Poisson-Disk-Sampling
+    if apply_poisson:
+        xy = xyz[:, :2]
+        mask = poisson_disk_on_points_xy(xy, radius=poisson_radius)
+    else:
+        mask = np.ones(n_points, dtype=bool)
+
+    if mask.sum() == 0:
+        print("Warning: No points after poisson sampling / initial filter")
+        return None
 
     # 1) pipe-based filter
     if near_pipe_filter:
@@ -64,15 +133,16 @@ def extract_pipeComponents(
             distance_threshold=config["pipe_distance_threshold"],
             ignore_z=True,
         )
-        mask = ensure_bool_mask(indicies, n_points)
+        pipe_mask = ensure_bool_mask(indicies, n_points)
+        mask = mask & pipe_mask
         kept = mask.sum()
-        print(f"Pipe filter: kept {kept}/{n_points} points.")
+        print(f"After pipe filter: kept {kept}/{n_points} points.")
     else:
-        mask = np.ones(n_points, dtype=bool)
+        pass
 
     if mask.sum() == 0:
-        print("Warning: No points after filter")
-        return
+        print("Warning: No points after combined filters")
+        return None
 
     # 2) Clustern nur auf XY
     print("Clustering points with HDBSCAN...")
@@ -117,8 +187,8 @@ def extract_pipeComponents(
         components.append((mins, maxs, centroid))
 
     # 5) Export
-    write_obj_boxes(
-        cluster_boxes, f"./output/obj/{pointcloudName}_pipeComponent_bbox.obj"
+    write_obj_pipeComponents(
+        components, f"./output/obj/{pointcloudName}_pipeComponents.obj"
     )
 
     print("")

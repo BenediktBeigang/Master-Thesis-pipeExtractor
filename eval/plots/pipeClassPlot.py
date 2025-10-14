@@ -49,8 +49,9 @@ def plot_segmentClasses(
     fig, (ax_counts, ax_lengths) = plt.subplots(
         nrows=2,
         ncols=1,
-        figsize=(12, 6),
-        gridspec_kw={"height_ratios": [1, 1], "hspace": 1.0},
+        figsize=(12, 4),
+        gridspec_kw={"height_ratios": [1, 1], "hspace": 1.5},
+        layout="constrained",
     )
 
     # ---- Counts (oben) ----
@@ -64,7 +65,7 @@ def plot_segmentClasses(
                 left=cumulative,
                 color=color,
                 label=f"{label}: {value} ({pct:.1f}%)",
-                height=0.6,
+                height=1.0,
             )
             # Text im Segment nur wenn breit genug (relativ)
             if pct > 8:
@@ -107,7 +108,7 @@ def plot_segmentClasses(
                     left=cumulative,
                     color=color,
                     label=f"{label}: {value:.2f} ({pct:.1f}%)",
-                    height=0.6,
+                    height=1.0,
                 )
                 # Text im Segment: zeige absolute Länge; nur wenn Segment relativ groß genug
                 if pct > 6:
@@ -150,8 +151,6 @@ def plot_segmentClasses(
         )
         ax_lengths.set_xticks([])
         ax_lengths.set_yticks([])
-
-    plt.tight_layout()
 
     if out_png:
         fig.savefig(out_png, dpi=300, bbox_inches="tight")

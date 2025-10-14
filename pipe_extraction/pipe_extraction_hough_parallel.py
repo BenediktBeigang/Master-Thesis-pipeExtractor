@@ -9,7 +9,7 @@ import sys
 import numpy as np
 from pipe_extraction.calcSlice import get_z_slices
 from pipe_extraction.clustering_hough import cluster_segments
-from custom_types import Segment3DArray
+from custom_types import Point3DArray, Segment3DArray
 from pipe_extraction.export import (
     write_clusters_as_obj,
     write_obj_lines,
@@ -26,7 +26,7 @@ from util import load_config
 
 def extract_pipes(
     xyz: np.ndarray, config_path: str, pointcloudName: str
-) -> Segment3DArray:
+) -> tuple[Segment3DArray, list[Point3DArray]]:
     """
     Extracts pipes from a point cloud.
 
@@ -157,9 +157,10 @@ def extract_pipes(
     phase_2_enabled = True
     if phase_2_enabled:
         print("Phase 2: Snap segments to original point cloud data...")
-        all_segments = snap_segments_to_point_cloud_data_parallel(
+        all_segments, snapped_chains = snap_segments_to_point_cloud_data_parallel(
             xyz,
             all_segments,
+            pointcloudName,
             config_path,
         )
 
@@ -178,4 +179,4 @@ def extract_pipes(
     endTime = time.time()
     print(f"Total time taken: {endTime - startTime:.2f} seconds")
 
-    return all_segments
+    return all_segments, snapped_chains

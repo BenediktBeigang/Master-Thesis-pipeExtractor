@@ -48,7 +48,7 @@ def calc_gt_cover(gt: Segment3D, det: Segment3D) -> Tuple[float, float]:
     return t_start, t_end
 
 
-def calculate_coverage_absolute(gt_cover: dict) -> Tuple[List[float], List[float]]:
+def calculate_coverage_absolute(gt_cover: dict) -> Tuple[float, float]:
     """
     Berechnet für jedes GT-Segment die absolute Abdeckungslänge.
 

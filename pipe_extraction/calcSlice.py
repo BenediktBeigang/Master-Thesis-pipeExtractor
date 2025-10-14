@@ -5,7 +5,7 @@ from pipe_extraction.mapping import pixel_to_world
 from skimage.feature import canny
 from skimage.filters import gaussian
 from skimage.transform import probabilistic_hough_line
-from custom_types import Segment2DArray, Segment3DArray
+from custom_types import Segment2DArray, Segment3DArray, Segment3DArray_Empty
 
 
 def get_z_slices(xyz: np.ndarray, thickness: float) -> List[Tuple[float, float, float]]:
@@ -237,7 +237,7 @@ def find_lines_in_slice(
     sliced = slice_by_z(xyz, zmin, zmax)
 
     if sliced.shape[0] == 0:
-        return []
+        return Segment3DArray_Empty()
 
     xy = sliced[:, :2]
     H, (y_edges, x_edges) = rasterize_xy(xy, cell_size=args["cell_size"])
@@ -255,8 +255,9 @@ def find_lines_in_slice(
         max_line_gap_m=args["max_line_gap"],
     )
 
-    return (
-        []
-        if len(seg_px) == 0
-        else [pixel_to_world(seg, y_edges, x_edges, z_center) for seg in seg_px]
-    )
+    segments_3d = []
+    for seg in seg_px:
+        world_seg = pixel_to_world(seg, y_edges, x_edges, z_center)
+        segments_3d.append(world_seg)
+
+    return np.array(segments_3d, dtype=np.float64)
