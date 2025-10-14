@@ -5,7 +5,7 @@ import time
 from custom_types import PipeComponentArray, Point3D, Segment3DArray
 from pipeComponent_extraction.export import write_obj_pipeComponents
 from pipeComponent_extraction.filter import filter_points_by_pipe_distance_vectorized
-from util import load_config
+from util import load_config, poisson_disk_on_points_xy
 
 
 def ensure_bool_mask(
@@ -40,62 +40,6 @@ def _nearest_pipe_info(point_xy: Point3D, pipes: Segment3DArray) -> tuple[float,
             best_dist = dist
             best_z = float(pipe[0, 2] + t * (pipe[1, 2] - pipe[0, 2]))
     return best_dist, best_z
-
-
-def poisson_disk_on_points_xy(xy: np.ndarray, radius: float) -> np.ndarray:
-    if xy.size == 0:
-        return np.zeros(0, dtype=bool)
-
-    n = xy.shape[0]
-    rng = np.random.default_rng(42)
-    order = rng.permutation(n)
-
-    # cell size = radius (check 3x3 neighbors)
-    cell_size = float(radius)
-    mins = xy.min(axis=0)
-    cell_coords = np.floor((xy - mins) / cell_size).astype(np.int32)
-
-    grid: dict[tuple[int, int], list[int]] = {}
-    kept_mask = np.zeros(n, dtype=bool)
-    r2 = radius * radius
-
-    # Localize for speed
-    _cell_coords = cell_coords
-    _xy = xy
-    _grid_get = grid.get
-    _grid_setdefault = grid.setdefault
-
-    accepted = 0
-    for idx in order:
-        cc = (_cell_coords[idx, 0], _cell_coords[idx, 1])
-        found = False
-
-        # check neighbor cells (3x3)
-        cx, cy = cc
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                nb = _grid_get((cx + dx, cy + dy))
-                if not nb:
-                    continue
-                # check distances to already accepted points in that cell
-                for a_idx in nb:
-                    d2 = (_xy[a_idx, 0] - _xy[idx, 0]) ** 2 + (
-                        _xy[a_idx, 1] - _xy[idx, 1]
-                    ) ** 2
-                    if d2 < r2:
-                        found = True
-                        break
-                if found:
-                    break
-            if found:
-                break
-
-        if not found:
-            kept_mask[idx] = True
-            _grid_setdefault(cc, []).append(int(idx))
-            accepted += 1
-
-    return kept_mask
 
 
 def extract_pipeComponents(

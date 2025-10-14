@@ -4,7 +4,6 @@
 from __future__ import annotations
 import math
 import numpy as np
-from scipy.stats import qmc
 from scipy.spatial import KDTree
 from custom_types import (
     Point2D,
@@ -15,6 +14,7 @@ from custom_types import (
     Segment3DArray_One,
 )
 from pipe_extraction.samplePointMerge import extract_segments
+from util import poisson_disk_on_points_xy
 
 
 def _unit(v: np.ndarray) -> np.ndarray:
@@ -165,41 +165,19 @@ def _bbox_centroid_for_endpoint(
     if args["poisson_radius"] <= 0:
         raise ValueError("poisson_radius must be > 0")
 
-    # --- Poisson-Disk-Subsampling im lokalen Rechteck [-w, w] x [-L, L] ---
-    # 1) Generiere Poisson-Disk-Samples im lokalen Domain-Rechteck
-    w = args["tangential_length"]
-    L = args["normal_length"]
-    eng = qmc.PoissonDisk(
-        d=2,
-        radius=float(args["poisson_radius"]),
-        l_bounds=np.array([-w, -L]),
-        u_bounds=np.array([+w, +L]),
-        rng=int(42),
-    )
-    # fill_space füllt bis keine Kandidaten mehr passen (für d=2 meist flott)
-    S = eng.fill_space()  # (M,2) lokale Samplepunkte
-
-    # Fallback: Wenn aus irgendeinem Grund keine Samples entstehen, nimm alle Punkte
-    if S.size == 0:
-        selected_xy = cloud_2D[idx].mean(axis=0)
-        z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(z_values, args["quantization_precision"])
-        return selected_xy, selected_z, idx.size
-
-    # 2) Mappe Samples auf die nächstgelegenen Originalpunkte in der Box (lokal!)
-    P_local = np.column_stack((x_local[idx], y_local[idx]))  # (K,2)
-    kdt = KDTree(P_local)
-    nn_idx = kdt.query(S, k=1)[1]  # (M,) Indizes innerhalb von 'idx'
-    nn_idx = np.unique(nn_idx)  # eindeutige Auswahl
+    # --- Direktes Poisson-Subsampling der Punkte in der lokalen Box ---
+    P_local = np.column_stack((x_local[idx], y_local[idx]))  # (K,2) lokale Koordinaten
+    kept_mask = poisson_disk_on_points_xy(P_local, float(args["poisson_radius"]))
+    nn_idx = np.nonzero(kept_mask)[0]
 
     if nn_idx.size < args["min_points_for_centroid"]:
-        # Wenn zu wenige Punkte übrig bleiben, fallback auf alle Box-Punkte
+        # Fallback: Wenn zu wenige Punkte übrig bleiben, nimm alle Box-Punkte
         selected_xy = cloud_2D[idx].mean(axis=0)
         z_values = cloud_3D[idx, 2]
         selected_z = _compute_quantized_z(z_values, args["quantization_precision"])
         return selected_xy, selected_z, idx.size
 
-    # 3) Schwerpunkt in Weltkoordinaten über der subsampleten Teilmenge
+    # Schwerpunkt in Weltkoordinaten über der subsampleten Teilmenge
     idx_sub = idx[nn_idx]
     selected_xy = cloud_2D[idx_sub].mean(axis=0)
     z_values = cloud_3D[idx_sub, 2]

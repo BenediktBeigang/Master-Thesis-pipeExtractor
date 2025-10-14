@@ -7,8 +7,8 @@ Point2D = Annotated[NDArray[np.float64], "Shape: (2,)"]
 Point3D = Annotated[NDArray[np.float64], "Shape: (3,)"]
 
 # Array
-Point2DArray = Annotated[NDArray[np.float64], "Shape: (2, N)"]
-Point3DArray = Annotated[NDArray[np.float64], "Shape: (3, N)"]
+Point2DArray = Annotated[NDArray[np.float64], "Shape: (N, 2)"]
+Point3DArray = Annotated[NDArray[np.float64], "Shape: (N, 3)"]
 
 
 def Point3DArray_One(point: Point3D) -> Point3DArray:
@@ -29,7 +29,7 @@ Segment3DArray = Annotated[NDArray[np.float64], "Shape: (N, 2, 3)"]
 
 
 def Segment3D_Create(start: Point3D, end: Point3D) -> Segment3D:
-    return np.vstack([start, end])
+    return np.stack((start, end), axis=0)
 
 
 def Segment2DArray_Empty():
