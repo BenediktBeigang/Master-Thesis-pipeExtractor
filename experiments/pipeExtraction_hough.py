@@ -28,7 +28,7 @@ import datetime
 import time
 import math
 import sys
-from typing import Tuple, List
+from typing import List
 from experiments.PipeCluster import clean_pipes
 from skimage.feature import canny
 from skimage.filters import gaussian
@@ -38,7 +38,7 @@ import numpy as np
 from lasUtil import load_las_xyz
 
 
-def get_z_slices(xyz: np.ndarray, thickness: float) -> List[Tuple[float, float, float]]:
+def get_z_slices(xyz: np.ndarray, thickness: float) -> List[tuple[float, float, float]]:
     """
     Berechnet alle Z-Slice Parameter (z_center, zmin, zmax) basierend auf der Bounding Box.
 
@@ -81,8 +81,8 @@ def slice_by_z(xyz: np.ndarray, zmin: float, zmax: float) -> np.ndarray:
 
 
 def rasterize_xy(
-    xy: np.ndarray, cell_size: float, bounds: Tuple[float, float, float, float] = None
-) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    xy: np.ndarray, cell_size: float, bounds: tuple[float, float, float, float] = None
+) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:
     """
     Rasterisiert XY-Punkte in ein 2D-Count-Grid via histogram2d.
     Rückgabe:
@@ -138,7 +138,7 @@ def hough_segments(
     cell_size: float,
     min_line_length_m: float = 0.4,
     max_line_gap_m: float = 0.10,
-) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+) -> List[tuple[tuple[float, float], tuple[float, float]]]:
     """
     Probabilistic Hough auf Binärbild.
     Rückgabe: Liste von Segmenten in Pixelkoordinaten [( (x0,y0), (x1,y1) ), ...]
@@ -156,11 +156,11 @@ def hough_segments(
 
 
 def pixel_to_world(
-    segment_px: Tuple[Tuple[float, float], Tuple[float, float]],
+    segment_px: tuple[tuple[float, float], tuple[float, float]],
     y_edges: np.ndarray,
     x_edges: np.ndarray,
     z_value: float,
-) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """
     Wandelt ein Segment in Pixelkoordinaten (x=Spalte, y=Zeile) ins Weltkoordinaten-System um.
     Nutzen den Zellenmittelpunkt: x = x_edges[col].., y = y_edges[row]..
@@ -186,7 +186,7 @@ def pixel_to_world(
 
 def process_single_slice(
     xyz: np.ndarray, z_center: float, zmin: float, zmax: float, args, slice_idx: int
-) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
+) -> List[tuple[tuple[float, float, float], tuple[float, float, float]]]:
     """
     Verarbeitet einen einzelnen Z-Slice und gibt die gefundenen Liniensegmente zurück.
     """
@@ -233,7 +233,7 @@ def process_single_slice(
 
 
 def write_obj_lines(
-    segments_world: List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
+    segments_world: List[tuple[tuple[float, float, float], tuple[float, float, float]]],
     out_path: str,
 ) -> None:
     """
@@ -255,7 +255,7 @@ def write_obj_lines(
 
 
 def segments_to_pipes_format(
-    segments_world: List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
+    segments_world: List[tuple[tuple[float, float, float], tuple[float, float, float]]],
 ) -> List[dict]:
     """
     Konvertiert Hough-Segmente ins found_pipes Format für das Clustering.
@@ -286,7 +286,7 @@ def segments_to_pipes_format(
 
 def pipes_format_to_segments(
     pipes: List[dict],
-) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
+) -> List[tuple[tuple[float, float, float], tuple[float, float, float]]]:
     """
     Konvertiert das found_pipes Format zurück zu Segmenten für OBJ-Export.
     """

@@ -1,14 +1,14 @@
 import math
-from typing import List, Tuple
+from typing import List
 import numpy as np
 
 
 def pixel_to_world(
-    segment_px: Tuple[Tuple[float, float], Tuple[float, float]],
+    segment_px: tuple[tuple[float, float], tuple[float, float]],
     y_edges: np.ndarray,
     x_edges: np.ndarray,
     z_value: float,
-) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     """
     Wandelt ein Segment in Pixelkoordinaten (x=Spalte, y=Zeile) ins Weltkoordinaten-System um.
     Nutzen den Zellenmittelpunkt: x = x_edges[col].., y = y_edges[row]..
@@ -33,7 +33,7 @@ def pixel_to_world(
 
 
 def segments_to_pipes_format(
-    segments_world: List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
+    segments_world: List[tuple[tuple[float, float, float], tuple[float, float, float]]],
 ) -> List[dict]:
     """
     Konvertiert Hough-Segmente ins found_pipes Format für das Clustering.
@@ -64,7 +64,7 @@ def segments_to_pipes_format(
 
 def pipes_format_to_segments(
     pipes: List[dict],
-) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]]:
+) -> List[tuple[tuple[float, float, float], tuple[float, float, float]]]:
     """
     Konvertiert das found_pipes Format zurück zu Segmenten für OBJ-Export.
     """

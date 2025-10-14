@@ -90,7 +90,7 @@ def is_component_in_tolerance(
         tolerance: Maximal zulässiger Abstand in der XY-Ebene
 
     Returns:
-        Tuple[bool, float | None, float | None]:
+        tuple[bool, float | None, float | None]:
             - bool: True, wenn XY-Abstand <= Toleranz
             - float | None: XY-Abstand (None, falls außerhalb der Toleranz)
             - float | None: Absoluter Z-Abstand (None, falls außerhalb der Toleranz)

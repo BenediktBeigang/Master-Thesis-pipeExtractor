@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 import numpy as np
 from sklearn.cluster import HDBSCAN  # type: ignore
 import time
@@ -21,7 +21,7 @@ def ensure_bool_mask(
     return mask
 
 
-def _nearest_pipe_info(point_xy: Point3D, pipes: Segment3DArray) -> Tuple[float, float]:
+def _nearest_pipe_info(point_xy: Point3D, pipes: Segment3DArray) -> tuple[float, float]:
     best_dist = np.inf
     best_z = 0.0
     for pipe in pipes:

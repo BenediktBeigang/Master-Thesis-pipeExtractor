@@ -1,5 +1,5 @@
 import math
-from typing import List, Tuple
+from typing import List
 import numpy as np
 from pipe_extraction.mapping import pixel_to_world
 from skimage.feature import canny
@@ -8,7 +8,7 @@ from skimage.transform import probabilistic_hough_line
 from custom_types import Segment2DArray, Segment3DArray, Segment3DArray_Empty
 
 
-def get_z_slices(xyz: np.ndarray, thickness: float) -> List[Tuple[float, float, float]]:
+def get_z_slices(xyz: np.ndarray, thickness: float) -> List[tuple[float, float, float]]:
     """
     Compute all Z-slice parameters (z_center, zmin, zmax) based on the point cloud bounding box.
 
@@ -26,7 +26,7 @@ def get_z_slices(xyz: np.ndarray, thickness: float) -> List[Tuple[float, float, 
 
     Returns
     -------
-    List[Tuple[float, float, float]]
+    List[tuple[float, float, float]]
         List of tuples (z_center, zmin, zmax) for each slice.
     """
     z_min = float(xyz[:, 2].min())
@@ -81,7 +81,7 @@ def slice_by_z(xyz: np.ndarray, zmin: float, zmax: float) -> np.ndarray:
 
 def rasterize_xy(
     xy: np.ndarray, cell_size: float
-) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+) -> tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]:
     """
     Rasterize XY points into a 2D count grid using numpy histogram2d.
 
@@ -97,7 +97,7 @@ def rasterize_xy(
 
     Returns
     -------
-    Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]
+    tuple[np.ndarray, tuple[np.ndarray, np.ndarray]]
         H : 2D array of shape (ny, nx) with per-cell counts (float64).
         edges : Tuple of (y_edges, x_edges) returned by numpy.histogram2d.
     """

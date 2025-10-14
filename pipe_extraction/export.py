@@ -1,5 +1,5 @@
 import os
-from typing import List, Tuple
+from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import hough_line_peaks
@@ -37,7 +37,7 @@ def save_slice_las(
 
 
 def save_slice_obj(
-    segments_world: List[Tuple[Tuple[float, float, float], Tuple[float, float, float]]],
+    segments_world: List[tuple[tuple[float, float, float], tuple[float, float, float]]],
     slice_idx: int,
     z_center: float,
     output_dir: str,
@@ -190,7 +190,7 @@ def write_clusters_as_json(
 
 def save_slice_images(
     binary: np.ndarray,
-    segments_px: List[Tuple[Tuple[float, float], Tuple[float, float]]],
+    segments_px: List[tuple[tuple[float, float], tuple[float, float]]],
     hough_space: np.ndarray,
     theta: np.ndarray,
     d: np.ndarray,

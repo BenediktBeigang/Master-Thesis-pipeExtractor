@@ -1,6 +1,4 @@
 import numpy as np
-from typing import Tuple
-
 from custom_types import Segment3DArray
 
 
@@ -38,7 +36,7 @@ def _points_to_segment_min_distances_chunked(
 
 def _normalize_pipes_to_arrays(
     pipes: Segment3DArray, ignore_z: bool
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Unterstützt ausschliesslich Segment3DArray:
       ndarray mit Shape (M, 2, 3) wobei jede Zeile [p1, p2] ist.

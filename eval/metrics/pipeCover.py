@@ -1,4 +1,3 @@
-from typing import List, Tuple
 from custom_types import Point3D, Segment3D
 from eval.util import _dot, _norm, _sub
 
@@ -25,7 +24,7 @@ def _project_point_on_segment_as_t(p: Point3D, a: Point3D, b: Point3D) -> float:
     return max(0.0, min(1.0, t))
 
 
-def calc_gt_cover(gt: Segment3D, det: Segment3D) -> Tuple[float, float]:
+def calc_gt_cover(gt: Segment3D, det: Segment3D) -> tuple[float, float]:
     """
     Berechnet die Abdeckung eines Detection-Segments auf einem Ground Truth Segment.
 
@@ -48,7 +47,7 @@ def calc_gt_cover(gt: Segment3D, det: Segment3D) -> Tuple[float, float]:
     return t_start, t_end
 
 
-def calculate_coverage_absolute(gt_cover: dict) -> Tuple[float, float]:
+def calculate_coverage_absolute(gt_cover: dict) -> tuple[float, float]:
     """
     Berechnet für jedes GT-Segment die absolute Abdeckungslänge.
 

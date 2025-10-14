@@ -1,8 +1,5 @@
-from typing import List, Tuple
-
-import numpy as np
-from custom_types import PipeComponentArray, Point3D
-from eval.export import export_points_to_obj
+from typing import List
+from custom_types import PipeComponentArray
 from eval.metrics.pipeTruePositive import is_component_in_tolerance
 
 
@@ -11,7 +8,7 @@ def component_detection_metric(
     detected_components: PipeComponentArray,
     pointcloudName: str,
     tolerance: float = 0.5,
-) -> Tuple[int, int, int, List[float], List[float]]:
+) -> tuple[int, int, int, List[float], List[float]]:
     """
     Calculates detection metrics for pipe segments based on ground truth and detections.
 

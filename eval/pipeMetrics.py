@@ -1,5 +1,5 @@
 import math
-from typing import List, Tuple
+from typing import List
 from custom_types import Segment3D
 from eval.metrics.pipeCover import calc_gt_cover, calculate_coverage_absolute
 from eval.metrics.pipeTruePositive import (
@@ -32,7 +32,7 @@ def _best_pair_maxdist_xy(gt: Segment3D, det: Segment3D) -> float:
 
 def _segment_key(
     segment: Segment3D,
-) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
     def _to_tuple(point):
         if hasattr(point, "tolist"):
             return tuple(point.tolist())
@@ -46,7 +46,7 @@ def pipe_detection_metric(
     detected_segments: List[Segment3D],
     pointcloudName: str,
     tolerance: float = 0.5,
-) -> Tuple[int, int, int, int, List[float], List[float], float, float, float]:
+) -> tuple[int, int, int, int, List[float], List[float], float, float, float]:
     """
     Berechnet Metriken zur Bewertung der Erkennung von Liniensegmenten.
 

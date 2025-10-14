@@ -1,7 +1,6 @@
 import os
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import shared_memory, get_context
-from typing import Tuple
 import numpy as np
 from scipy.spatial import KDTree
 from custom_types import Point3DArray, Segment3DArray, Segment3DArray_Empty
@@ -68,7 +67,7 @@ def snap_segments_to_point_cloud_data_parallel(
     pointcloudName: str,
     config_path: str,
     max_workers: int = -1,
-) -> Tuple[Segment3DArray, list[Point3DArray]]:
+) -> tuple[Segment3DArray, list[Point3DArray]]:
     """
     Uses the approximated segments that are close to the real pipes in the pointcloud and snaps to them.
     This function is parallelized and uses shared memory to avoid copying the point cloud data to each worker.
