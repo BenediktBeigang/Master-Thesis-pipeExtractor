@@ -21,9 +21,11 @@ def ensure_bool_mask(
     return mask
 
 
-def _nearest_pipe_info(point_xy: Point3D, pipes: Segment3DArray) -> tuple[float, float]:
+def _nearest_pipe_info(
+    point_xy: Point3D, pipes: Segment3DArray
+) -> tuple[float, float | None]:
     best_dist = np.inf
-    best_z = 0.0
+    best_z = None
     for pipe in pipes:
         start_xy = pipe[0, :2]
         end_xy = pipe[1, :2]
@@ -111,23 +113,23 @@ def extract_pipeComponents(
     # 4) Für jedes Cluster einfache Bounding-Box und Centroid berechnen (auf 3D-Punkte)
     unique = set(labels_filtered)
     unique.discard(-1)
-    cluster_boxes = {}
-    means = {}
     components: PipeComponentArray = []
     for c in sorted(unique):
         orig_inds = np.where(full_labels == c)[0]
         pts3d = xyz[orig_inds]
-        centroid = pts3d.mean(axis=0)
+        if pts3d.size == 0:
+            continue
+        centroid = np.median(pts3d, axis=0)
         if pipes.size == 0:
             continue
         dist_xy, pipe_z = _nearest_pipe_info(centroid[:2], pipes)
         if dist_xy > config["pipe_distance_threshold"]:
             continue
+        if pipe_z is None:
+            pipe_z = float(pts3d[:, 2].min())
         centroid[2] = pipe_z
         mins = pts3d.min(axis=0)
         maxs = pts3d.max(axis=0)
-        cluster_boxes[c] = (mins.tolist(), maxs.tolist())
-        means[c] = centroid.tolist()
         components.append((mins, maxs, centroid))
 
     # 5) Export
