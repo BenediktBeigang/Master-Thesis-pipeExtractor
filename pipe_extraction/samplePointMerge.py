@@ -54,7 +54,7 @@ def _buckets_by_delta_z(
         form a coherent bucket based on z-coordinate progression. Each bucket
         contains at least 2 points.
     """
-    deltaZ_threshold = math.sin(math.radians(max_angle_change_deg)) / samples_per_meter
+    deltaZ_threshold = math.tan(math.radians(max_angle_change_deg)) / samples_per_meter
 
     if points_3D_chain is None or len(points_3D_chain) < 2:
         return []
@@ -123,7 +123,7 @@ def _buckets_by_delta_z(
 
     # Ignore all buckets that:
     # - have less than min_points_per_bucket
-    # - with a mean angle change of more than 20 degrees
+    # - with a mean angle change of more than 15 degrees
     buckets = [
         b
         for b in buckets

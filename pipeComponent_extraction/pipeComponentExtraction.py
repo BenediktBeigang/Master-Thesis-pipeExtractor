@@ -119,7 +119,7 @@ def extract_pipeComponents(
         pts3d = xyz[orig_inds]
         if pts3d.size == 0:
             continue
-        centroid = np.median(pts3d, axis=0)
+        centroid = pts3d.mean(axis=0)  # bewusst nicht median, da loch in der mitte
         if pipes.size == 0:
             continue
         dist_xy, pipe_z = _nearest_pipe_info(centroid[:2], pipes)

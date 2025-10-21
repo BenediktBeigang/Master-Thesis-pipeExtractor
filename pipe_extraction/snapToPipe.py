@@ -171,18 +171,14 @@ def _bbox_centroid_for_endpoint(
     nn_idx = np.nonzero(kept_mask)[0]
 
     if nn_idx.size < args["min_points_for_centroid"]:
-        # Fallback: Wenn zu wenige Punkte übrig bleiben, nimm alle Box-Punkte
-        selected_xy = cloud_2D[idx].mean(axis=0)
-        z_values = cloud_3D[idx, 2]
-        selected_z = _compute_quantized_z(z_values, args["quantization_precision"])
-        return selected_xy, selected_z, idx.size
+        final_indices = idx
+    else:
+        final_indices = idx[nn_idx]
 
-    # Schwerpunkt in Weltkoordinaten über der subsampleten Teilmenge
-    idx_sub = idx[nn_idx]
-    selected_xy = cloud_2D[idx_sub].mean(axis=0)
-    z_values = cloud_3D[idx_sub, 2]
+    selected_xy = cloud_2D[final_indices].mean(axis=0)
+    z_values = cloud_3D[final_indices, 2]
     selected_z = _compute_quantized_z(z_values, args["quantization_precision"])
-    return selected_xy, selected_z, idx_sub.size
+    return selected_xy, selected_z, final_indices.size
 
 
 def process_single_segment(
