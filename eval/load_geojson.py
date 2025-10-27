@@ -66,6 +66,9 @@ def load_geojson(
                 pipe_component = (bbox_min, bbox_max, point3d)
                 pipe_components.append(pipe_component)
             case "LineString":
+                if feature.get("id") and "chain_" in feature.get("id"):
+                    continue
+
                 coords = _safe_iterable(geometry.get("coordinates"))[:2]
                 if len(coords) == 2:
                     start, end = (_as_point3d(c) for c in coords)

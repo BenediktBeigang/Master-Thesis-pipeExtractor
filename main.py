@@ -64,10 +64,10 @@ def main():
         print("### Pipe Evaluation  ###")
         print("########################")
         ground_truth = [
-            "../Master-Thesis/poiExtraction/ontras_0_ground_truth.json",
-            "../Master-Thesis/poiExtraction/ontras_1_ground_truth.json",
-            "../Master-Thesis/poiExtraction/ontras_2_ground_truth.json",
-            "../Master-Thesis/poiExtraction/ontras_3_ground_truth.json",
+            "../Master-Thesis/ground_truth/ontras_0_ground_truth.json",
+            "../Master-Thesis/ground_truth/ontras_1_ground_truth.json",
+            "../Master-Thesis/ground_truth/ontras_2_ground_truth.json",
+            "../Master-Thesis/ground_truth/ontras_3_ground_truth.json",
         ]
         ground_truth_pipes, ground_truth_components, ground_truth_pipes_asChain = (
             load_geojson(ground_truth[3])
