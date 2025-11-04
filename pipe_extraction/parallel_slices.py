@@ -1,4 +1,6 @@
+import atexit
 from multiprocessing import shared_memory
+import os
 import numpy as np
 from util import load_config
 
@@ -10,12 +12,20 @@ _DTYPE = None
 
 
 def _init_shm(shm_name, shape, dtype_str):
-    """Wird einmal pro Worker-Prozess aufgerufen."""
+    # Thread-Limits, damit OpenBLAS/MKL/numexpr/OMP nicht neben Multiprocessing losballert
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
+
     global _SHM, _XYZ, _SHAPE, _DTYPE
     _SHM = shared_memory.SharedMemory(name=shm_name)
     _SHAPE = tuple(shape)
     _DTYPE = np.dtype(dtype_str)
     _XYZ = np.ndarray(_SHAPE, dtype=_DTYPE, buffer=_SHM.buf)
+
+    # sauber abräumen, wenn der Worker endet
+    atexit.register(lambda: _SHM and _SHM.close())
 
 
 def worker_process_slice(task, config_path):

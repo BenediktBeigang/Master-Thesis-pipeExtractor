@@ -119,7 +119,7 @@ def rasterize_xy(
     H, y_edges, x_edges = np.histogram2d(
         ys, xs, bins=(ny, nx), range=((ymin, ymax), (xmin, xmax))
     )
-    return H.astype(np.float64), (y_edges, x_edges)
+    return H.astype(np.float32), (y_edges, x_edges)
 
 
 def make_binary_from_counts(H: np.ndarray, canny_sigma: float) -> np.ndarray:
@@ -142,12 +142,12 @@ def make_binary_from_counts(H: np.ndarray, canny_sigma: float) -> np.ndarray:
     np.ndarray
         Boolean 2D array where True indicates an edge.
     """
-    if H.max() > 0:
-        Hs = gaussian(H / (H.max() + 1e-9), sigma=1.0, preserve_range=True)
-    else:
-        Hs = H
+    if H.max() == 0: return np.zeros_like(H, dtype=bool)
+    Hs = gaussian(H / (H.max() + 1e-9), sigma=1.0, preserve_range=True)
     edges = canny(Hs, sigma=canny_sigma)
-    return edges.astype(bool)
+    # Hn = (H / (H.max() + 1e-9)).astype(np.float32, copy=False)
+    # edges = canny(Hn, sigma=canny_sigma)
+    return edges.astype(bool, copy=False)
 
 
 def hough_segments(
@@ -241,6 +241,12 @@ def find_lines_in_slice(
 
     xy = sliced[:, :2]
     H, (y_edges, x_edges) = rasterize_xy(xy, cell_size=args["cell_size"])
+    approx_bytes = H.size * (8   # H float64
+                         + 8 # Kopie/Temp
+                         + 1 # edges bool
+                         + 8 # weitere Temps/Hough
+                         )
+    print(f"[slice {slice_idx}] grid={H.shape}, cells={H.size:,}, ~{approx_bytes/1e6:.1f} MB")
 
     binary = make_binary_from_counts(
         H,
