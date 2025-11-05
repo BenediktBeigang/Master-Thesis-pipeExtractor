@@ -141,7 +141,7 @@ def pipe_detection_metric(
         _norm(_sub(seg[1], seg[0])) for seg in false_positive_list
     )
 
-    write_segments_to_obj(missed_list, false_positive_list, pointcloudName)
+    # write_segments_to_obj(missed_list, false_positive_list, pointcloudName)
 
     return (
         correct,

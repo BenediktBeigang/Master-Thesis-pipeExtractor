@@ -25,7 +25,7 @@ from util import load_config
 
 
 def extract_pipes(
-    xyz: np.ndarray, config_path: str, pointcloudName: str
+    xyz: np.ndarray, config_path: str, pointcloudName: str, raw_segments_input: Segment3DArray = None, get_raw_segments: bool = False,
 ) -> tuple[Segment3DArray, list[Point3DArray]]:
     """
     Extracts pipes from a point cloud.
@@ -50,63 +50,71 @@ def extract_pipes(
     print(f"Load config.json...")
     config = load_config(config_path)
 
-    if xyz.size == 0:
-        print("Empty Pointcloud.", file=sys.stderr)
-        sys.exit(1)
+    if raw_segments_input is None:
 
-    print(f"Pointcloud loaded: {xyz.shape[0]} points")
+        if xyz.size == 0:
+            print("Empty Pointcloud.", file=sys.stderr)
+            sys.exit(1)
 
-    # Compute all Z-slices
-    slices = get_z_slices(xyz, config["slice_thickness"])
+        print(f"Pointcloud loaded: {xyz.shape[0]} points")
 
-    # Prepare Shared Memory
-    shm, shape, dtype_str = share_xyz_array(xyz)
+        # Compute all Z-slices
+        slices = get_z_slices(xyz, config["slice_thickness"])
 
-    # Build tasks in the order of slices (preserves sorting)
-    tasks = [(i, zc, zmin, zmax) for i, (zc, zmin, zmax) in enumerate(slices)]
+        # Prepare Shared Memory
+        shm, shape, dtype_str = share_xyz_array(xyz)
 
-    # Process all slices
-    all_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
-    total_processed = 0
+        # Build tasks in the order of slices (preserves sorting)
+        tasks = [(i, zc, zmin, zmax) for i, (zc, zmin, zmax) in enumerate(slices)]
 
-    print(f"Phase 1: Approximating lines...")
-    print(f"Phase 1a): Process {len(slices)} slices in parallel...")
+        # Process all slices
+        all_segments: Segment3DArray = np.empty((0, 2, 3), dtype=np.float64)
+        total_processed = 0
 
-    # Choose robust start method for multiprocessing:
-    # - Linux: 'fork' nutzt COW, spart anfänglich RAM, ist ok wenn du SharedMemory sowieso nutzt
-    # - Windows/macOS: 'spawn' ist Standard, SHM funktioniert dort genau für diesen Use-Case
-    ctx = get_context()  # Standard-Startmethode des OS
-    max_workers = os.cpu_count() or 4
-    chunksize = 8  # feinabstimmen bei vielen Slices
+        print(f"Phase 1: Approximating lines...")
+        print(f"Phase 1a): Process {len(slices)} slices in parallel...")
 
-    try:
-        with ProcessPoolExecutor(
-            max_workers=max_workers,
-            mp_context=ctx,
-            initializer=_init_shm,
-            initargs=(shm.name, shape, dtype_str),
-        ) as ex:
-            for slice_idx, segments in ex.map(
-                worker_process_slice,
-                tasks,
-                repeat(config_path),
-                chunksize=chunksize,
-            ):
-                if len(segments) > 0:
-                    all_segments = np.vstack([all_segments, segments])
-                total_processed += 1
-                if total_processed % 10 == 0:
-                    print(f"Finished: {total_processed}/{len(slices)} Slices")
-    finally:
-        # SHM nur im Hauptprozess schließen/unlinken
-        shm.close()
-        shm.unlink()
-        print()
+        # Choose robust start method for multiprocessing:
+        # - Linux: 'fork' nutzt COW, spart anfänglich RAM, ist ok wenn du SharedMemory sowieso nutzt
+        # - Windows/macOS: 'spawn' ist Standard, SHM funktioniert dort genau für diesen Use-Case
+        ctx = get_context("spawn")  # Standard-Startmethode des OS
+        max_workers = os.cpu_count() or 4
+        chunksize = 1  # feinabstimmen bei vielen Slices
 
-    print(
-        f"Phase 1a): Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
-    )
-    checkpointTime = time.time()
+        try:
+            with ProcessPoolExecutor(
+                max_workers=max_workers,
+                mp_context=ctx,
+                initializer=_init_shm,
+                initargs=(shm.name, shape, dtype_str),
+            ) as ex:
+                for slice_idx, segments in ex.map(
+                    worker_process_slice,
+                    tasks,
+                    repeat(config_path),
+                    chunksize=chunksize,
+                ):
+                    if len(segments) > 0:
+                        all_segments = np.vstack([all_segments, segments])
+                    total_processed += 1
+                    if total_processed % 10 == 0:
+                        print(f"Finished: {total_processed}/{len(slices)} Slices")
+        finally:
+            # SHM nur im Hauptprozess schließen/unlinken
+            shm.close()
+            shm.unlink()
+            print()
+
+        print(
+            f"Phase 1a): Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
+        )
+        checkpointTime = time.time()
+    
+        if get_raw_segments:
+            return all_segments, []
+        
+    else:
+        all_segments = raw_segments_input
 
     if len(all_segments) == 0:
         print("No lines found in any slice.", file=sys.stderr)
@@ -131,11 +139,11 @@ def extract_pipes(
     )
 
     result_phase1b_clustering = result_phase1b_clustering["clusters"]
-    write_clusters_as_obj(
-        segments=all_segments,
-        clusters=result_phase1b_clustering,
-        output_path=f"./output/obj/{pointcloudName}_cluster.obj",
-    )
+    # write_clusters_as_obj(
+    #     segments=all_segments,
+    #     clusters=result_phase1b_clustering,
+    #     output_path=f"./output/obj/{pointcloudName}_cluster.obj",
+    # )
 
     all_segments = merge_segments_in_clusters(
         all_segments,
@@ -149,10 +157,10 @@ def extract_pipes(
     )
     checkpointTime = time.time()
 
-    write_obj_lines(
-        all_segments,
-        f"./output/obj/{pointcloudName}_approx.obj",
-    )
+    # write_obj_lines(
+    #     all_segments,
+    #     f"./output/obj/{pointcloudName}_approx.obj",
+    # )
 
     phase_2_enabled = True
     if phase_2_enabled:
@@ -164,17 +172,17 @@ def extract_pipes(
             config_path,
         )
 
-        write_obj_lines(
-            all_segments,
-            f"./output/obj/{pointcloudName}_snapped.obj",
-        )
+        # write_obj_lines(
+        #     all_segments,
+        #     f"./output/obj/{pointcloudName}_snapped.obj",
+        # )
         print(
             f"Phase 2: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"
         )
         checkpointTime = time.time()
 
     print(f"\nFinished!")
-    print(f"Processed slices: {len(slices)}")
+    # print(f"Processed slices: {len(slices)}")
     print(f"Total lines found: {len(all_segments)}")
     endTime = time.time()
     print(f"Total time taken: {endTime - startTime:.2f} seconds")

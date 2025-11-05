@@ -143,10 +143,10 @@ def make_binary_from_counts(H: np.ndarray, canny_sigma: float) -> np.ndarray:
         Boolean 2D array where True indicates an edge.
     """
     if H.max() == 0: return np.zeros_like(H, dtype=bool)
-    Hs = gaussian(H / (H.max() + 1e-9), sigma=1.0, preserve_range=True)
-    edges = canny(Hs, sigma=canny_sigma)
-    # Hn = (H / (H.max() + 1e-9)).astype(np.float32, copy=False)
-    # edges = canny(Hn, sigma=canny_sigma)
+    # Hs = gaussian(H / (H.max() + 1e-9), sigma=1.0, preserve_range=True)
+    # edges = canny(Hs, sigma=canny_sigma)
+    Hn = (H / (H.max() + 1e-9)).astype(np.float32, copy=False)
+    edges = canny(Hn, sigma=canny_sigma)
     return edges.astype(bool, copy=False)
 
 
