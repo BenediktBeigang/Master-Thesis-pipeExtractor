@@ -11,7 +11,7 @@
   "slice_cluster_and_merge": {
     "epsilon": 0.45,
     "min_samples": 3,
-    "rho_scale": 0.8,
+    "rho_scale": 1.0,
     "preserve_noise": false,
     "min_line_length": 1.5,
     "max_line_gap": 2.0
@@ -19,7 +19,7 @@
   "global_cluster_and_merge": {
     "epsilon": 0.7,
     "min_samples": 1,
-    "rho_scale": 1.5,
+    "rho_scale": 1.0,
     "preserve_noise": true,
     "min_line_length": 1.0,
     "max_line_gap": 2.0
