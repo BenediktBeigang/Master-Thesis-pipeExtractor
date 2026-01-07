@@ -33,9 +33,7 @@ def main(
         Whether to run evaluation after extraction.
     """
     prepare_output_directory("./output/", clean=False)
-    path_to_pc = args.input if pc_path is None else pc_path
-    pointcloudName = os.path.basename(path_to_pc).split(".")[0]
-    pointcloudName = pointcloudName + "_" + os.path.basename(config_path).split(".")[0]
+    pointcloudName = os.path.basename(pc_path).split(".")[0]
 
     if True:
         print("#######################")
@@ -43,7 +41,7 @@ def main(
         print("#######################")
 
         xyz_pipes = load_las(
-            path_to_pc,
+            pc_path,
             ignoreZ=False,
             filterClass=1,
         )
@@ -60,7 +58,7 @@ def main(
         print("### Pipe Component Extraction ###")
         print("#################################")
         xyz_pipeComponents = load_las(
-            path_to_pc,
+            pc_path,
             ignoreZ=False,
             filterClass=2,
         )

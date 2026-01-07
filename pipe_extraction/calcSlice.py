@@ -242,7 +242,7 @@ def find_lines_in_slice(
     xy = sliced[:, :2]
     H, (y_edges, x_edges) = rasterize_xy(xy, cell_size=args["cell_size"])
     approx_bytes = H.size * (
-        8 + 8 + 1 + 8  # H float64  # Kopie/Temp  # edges bool  # weitere Temps/Hough
+        8 + 8 + 1 + 8  # H float64 + Kopie/Temp + edges bool + weitere Temps/Hough
     )
     print(
         f"[slice {slice_idx}] grid={H.shape}, cells={H.size:,}, ~{approx_bytes/1e6:.1f} MB"
