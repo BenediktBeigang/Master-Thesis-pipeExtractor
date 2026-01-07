@@ -2,7 +2,14 @@ import json
 from typing import Iterable, List
 
 import numpy as np
-from custom_types import PipeComponent, PipeComponentArray, Segment3D
+from custom_types import (
+    ListOfPoint3DArrays,
+    PipeComponent,
+    PipeComponentArray,
+    Point3DArray,
+    Segment3D,
+    Segment3DArray,
+)
 
 
 def _as_point3d(coord: Iterable[float]) -> np.ndarray:
@@ -22,7 +29,7 @@ def _safe_iterable(value: Iterable | None) -> list:
 
 def load_geojson(
     file_path: str,
-) -> tuple[List[Segment3D], PipeComponentArray | None, List[Segment3D]]:
+) -> tuple[Segment3DArray, PipeComponentArray | None, ListOfPoint3DArrays]:
     """
     Loads a GeoJSON file and extracts LineString geometries as 3D segments and Point geometries as 3D points.
 
@@ -35,15 +42,16 @@ def load_geojson(
     -------
     tuple
         A tuple containing:
-        - List[Segment3D]: An array of 3D segments (each segment is a numpy array of shape (2, 3)).
-        - A list of 3D points (each point is a numpy array of shape (3,)).
+        - Segment3DArray: An array of 3D segments/pipes (each segment is a numpy array of shape (2, 3)).
+        - PipeComponentArray | None: A list of pipe components (each component is a tuple of three 3D points).
+        - ListOfPoint3DArrays: A list of arrays of 3D points representing a pipe as a chain of sample points (each array represents a chain of points).
     """
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    pipes: List[Segment3D] = []
-    pipes_fromChains: List[Segment3D] = []
-    pipe_components: List[PipeComponent] = []
+    pipes: Segment3DArray = []
+    pipes_fromChains: ListOfPoint3DArrays = []
+    pipe_components: PipeComponentArray = []
 
     for feature in data.get("features", []):
         if feature.get("type") != "Feature":

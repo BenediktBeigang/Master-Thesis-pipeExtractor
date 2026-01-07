@@ -15,7 +15,7 @@ def Point3DArray_One(point: Point3D) -> Point3DArray:
     return point.reshape((1, 3))
 
 
-# Bucket
+# List of buckets / List of chains
 ListOfPoint2DArrays = Annotated[List[Point2DArray], "Each element shape: (M_i, 2)"]
 ListOfPoint3DArrays = Annotated[List[Point3DArray], "Each element shape: (M_i, 3)"]
 

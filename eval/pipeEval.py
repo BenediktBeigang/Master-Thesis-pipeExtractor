@@ -55,24 +55,24 @@ def pipeEval(ground_truth, detected_pipes, pointcloudName, output=None):
     with open(f"./output/metrics/{output}_pipes.json", "w") as f:
         json.dump(result, f, indent=2)
 
-    # if len(line_dist_xy_samples) > 0 or len(line_dist_z_samples) > 0:
-    #     plot_boxplots_lineDistances(
-    #         line_dist_xy_samples,
-    #         line_dist_z_samples,
-    #         out_png=f"./output/plots/{output}_boxplot_pipes.png",
-    #         part="Endpunkte",
-    #         title="Abstände der erkannten Rohre zu den Ground Truth Rohren",
-    #         show=False,
-    #     )
+    if len(line_dist_xy_samples) > 0 or len(line_dist_z_samples) > 0:
+        plot_boxplots_lineDistances(
+            line_dist_xy_samples,
+            line_dist_z_samples,
+            out_png=f"./output/plots/{output}_boxplot_pipes.png",
+            part="Endpunkte",
+            title="Abstände der erkannten Rohre zu den Ground Truth Rohren",
+            show=False,
+        )
 
-    # plot_segmentClasses(
-    #     correct,
-    #     partial,
-    #     missed,
-    #     false_positives,
-    #     coverage,
-    #     missed_length=total_length - coverage,
-    #     false_positive_length=false_positive_length,
-    #     out_png=f"./output/plots/{output}_segmentClasses.png",
-    #     show=False,
-    # )
+    plot_segmentClasses(
+        correct,
+        partial,
+        missed,
+        false_positives,
+        coverage,
+        missed_length=total_length - coverage,
+        false_positive_length=false_positive_length,
+        out_png=f"./output/plots/{output}_segmentClasses.png",
+        show=False,
+    )
