@@ -109,12 +109,12 @@ def main(
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Pipe extraction from LAS to GeoJSON/OBJ")
     ap.add_argument("--input", required=True, help="Path to LAS/LAZ file")
-    ap.add_argument("--gt_path", default=None, help="Path to Ground Truth GeoJSON file")
     ap.add_argument(
         "--config_path",
         default="./config.json",
         help="Path to configuration file (JSON) with parameters",
     )
+    ap.add_argument("--gt_path", default=None, help="Path to Ground Truth GeoJSON file")
     ap.add_argument(
         "--output_dir",
         default="./output",

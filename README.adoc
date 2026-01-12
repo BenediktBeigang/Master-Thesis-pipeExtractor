@@ -147,26 +147,32 @@ link:eval/componentEval.py[`componentEval()`]
 conda env create -f environment.yml
 conda activate pipe-extraction
 
-python main.py --input <filename>.las [--config_path <config>.json]
+# Minimal usage:
+python main.py --input <filename>.las
+
+# With all options:
+python main.py --input <filename>.las \\
+--config_path <config>.json  \\ # custom configuration
+--gt_path <ground_truth>.geojson \\ # ground truth for evaluation
+--eval \\ # enable evaluation (gt_path required)
+--output_dir <output_folder> # custom output folder
 ----
 
 == Configuration
 
-All pipeline parameters live in link:config.json[`config.json`]:
+All pipeline parameters are stored in link:config.json[`config.json`]:
 
-* `slice_thickness`, `hough` control slice generation and Hough detection.
-* `global_cluster_and_merge` sets DBSCAN epsilon, minimum samples, and gap thresholds for global merging.
-* `slice_cluster_and_merge` provides slice-specific clustering and merge settings.
-* `snapping` governs sampling density, bounding boxes, and RANSAC fitting.
+* `parallel_worker`: number of parallel workers for slice processing and snapping.
+* `slice_thickness`: thickness of slices in Z direction.
+* `hough`: control the Hough transform parameters.
+* `global_cluster_and_merge`: sets DBSCAN epsilon, minimum samples, and gap thresholds for global merging.
+* `slice_cluster_and_merge`: provides slice-specific clustering and merge settings.
+* `snapping`: governs sampling density, bounding boxes, and RANSAC fitting.
+* `pipeComponent_clustering`: sets HDBSCAN parameters for component detection.
 
 == Outputs
 
-* `output/obj/*.obj` — approximated and snapped pipe segments plus bounding boxes.
+* `output/obj/*.obj` — different results during pipe extraction phases for visualization in _CloudCompare_.
 * `output/geojson/*.geojson` — combined pipes and components via link:export_geojson.py[`export_geojson.export_geojson`].
 * `output/metrics/*.json` — pipe and component metrics from link:eval/pipeEval.py[`eval.pipeEval.pipeEval`] and link:eval/componentEval.py[`eval.componentEval.componentEval`].
 * `output/plots/*.png` — bar/box plots from link:eval/plots/pipeClassPlot.py[`eval.plots.pipeClassPlot.plot_segmentClasses`] and link:eval/plots/componentClassPlot.py[`eval.plots.componentClassPlot.plot_componentClasses`].
-
-== Development notes
-
-* Type hints in link:custom_types.py[`custom_types.py`] document NumPy shapes and structures.
-* Experiments, prototypes and old code in link:experiments[`experiments/`]
