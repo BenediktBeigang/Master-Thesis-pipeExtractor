@@ -3,7 +3,6 @@ import shutil
 import numpy as np
 import laspy
 import json
-from numpy.typing import NDArray
 
 
 def get_classification_array(las):
@@ -21,59 +20,46 @@ def get_classification_array(las):
     for name in ("classification", "Classification"):
         if name in dims:
             return las[name]
-    raise RuntimeError("LAS enthält kein Feld 'Classification' / 'classification'.")
+
+    print("LAS does not provide field 'Classification' or 'classification'.")
+    return None
 
 
-def load_las(
+def load_las_and_split(
     path: str,
     ignoreZ: bool = False,
-    filterClass: int | None = None,
-) -> np.ndarray:
+) -> tuple[np.ndarray, np.ndarray] | None:
     """
-    Loads a LAS/LAZ file and returns a Nx3 numpy array of points.
-
-    Parameters
-    ----------
-    path : str
-        Path to the LAS/LAZ file.
-    ignoreZ : bool, optional
-        If True, only X and Y coordinates are returned (Z is ignored). Default is False.
-    filterClass : int, optional
-        If provided, only points with the specified classification are returned. Default is None.
-
-    Returns
-    -------
-    Point3DArray or Point2DArray
-        Nx3 array of points (X, Y, Z) or Nx2 if ignoreZ is True.
+    Lädt die LAS-Datei einmal und teilt sie in Rohre (Klasse 1) und Komponenten (Klasse 2).
+    Gibt zwei getrennte Arrays zurück, die sicher im Speicher kopiert sind.
     """
-    try:
-        print(f"Load LAS-File: {path}")
-        las = laspy.read(path)
+    print(f"Load LAS-File (Full): {path}")
+    las = laspy.read(path)
 
-        # Bool-Maske für Klassifikation (falls gesetzt)
-        mask: NDArray[np.bool_] | None = None
-        if filterClass is not None:
-            cls = get_classification_array(las)
-            mask = cls == filterClass
+    classification_array = get_classification_array(las)
+    if classification_array is None:
+        raise RuntimeError("LAS field 'Classification' not found.")
 
-        # Sicherstellen, dass wir echte np.ndarray[float64] erhalten
-        x_all: NDArray[np.float64] = np.asarray(las.x, dtype=np.float64)
-        y_all: NDArray[np.float64] = np.asarray(las.y, dtype=np.float64)
+    x_all = np.asarray(las.x, dtype=np.float64)
+    y_all = np.asarray(las.y, dtype=np.float64)
 
-        if ignoreZ:
-            x = x_all[mask] if mask is not None else x_all
-            y = y_all[mask] if mask is not None else y_all
-            return np.column_stack((x, y))
+    points_all = None
+    if ignoreZ:
+        points_all = np.column_stack((x_all, y_all))
+    else:
+        z_all = np.asarray(las.z, dtype=np.float64)
+        points_all = np.column_stack((x_all, y_all, z_all))
 
-        z_all: NDArray[np.float64] = np.asarray(las.z, dtype=np.float64)
-        x = x_all[mask] if mask is not None else x_all
-        y = y_all[mask] if mask is not None else y_all
-        z = z_all[mask] if mask is not None else z_all
+    mask_pipes = classification_array == 1  # Class 1: Pipes
+    mask_components = classification_array == 2  # Class 2: Pipe Components
 
-        return np.column_stack((x, y, z))
+    xyz_pipes = points_all[mask_pipes]
+    xyz_components = points_all[mask_components]
 
-    except Exception as e:
-        raise RuntimeError(f"Konnte LAS nicht laden: {e}")
+    print(f"  -> Extracted {len(xyz_pipes)} points for pipes (Class 1)")
+    print(f"  -> Extracted {len(xyz_components)} points for components (Class 2)")
+
+    return xyz_pipes, xyz_components
 
 
 def prepare_output_directory(output_dir: str, clean: bool = True):
