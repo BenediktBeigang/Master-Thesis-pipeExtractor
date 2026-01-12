@@ -1,3 +1,4 @@
+import os
 from typing import Optional, Union
 import numpy as np
 from sklearn.cluster import HDBSCAN  # type: ignore
@@ -49,6 +50,7 @@ def extract_pipeComponents(
     config_path: str,
     pipes: Segment3DArray,
     pointcloudName: str,
+    output_dir: str,
     apply_poisson: bool = False,
     poisson_radius: float = 0.02,
     near_pipe_filter: bool = False,
@@ -134,7 +136,8 @@ def extract_pipeComponents(
 
     # 5) Export
     write_obj_pipeComponents(
-        components, f"./output/obj/{pointcloudName}_pipeComponents.obj"
+        components,
+        os.path.join(output_dir, "obj", f"{pointcloudName}_pipeComponents.obj"),
     )
 
     print("")

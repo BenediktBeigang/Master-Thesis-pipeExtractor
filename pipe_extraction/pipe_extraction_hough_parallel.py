@@ -25,7 +25,10 @@ from util import load_config
 
 
 def extract_pipes(
-    xyz: np.ndarray, config_path: str, pointcloudName: str
+    xyz: np.ndarray,
+    config_path: str,
+    pointcloudName: str,
+    output_dir: str,
 ) -> tuple[Segment3DArray, list[Point3DArray]]:
     """
     Extracts pipes from a point cloud.
@@ -134,7 +137,7 @@ def extract_pipes(
     write_clusters_as_obj(
         segments=all_segments,
         clusters=result_phase1b_clustering,
-        output_path=f"./output/obj/{pointcloudName}_cluster.obj",
+        output_path=os.path.join(output_dir, "obj", f"{pointcloudName}_cluster.obj"),
     )
 
     all_segments = merge_segments_in_clusters(
@@ -151,7 +154,7 @@ def extract_pipes(
 
     write_obj_lines(
         all_segments,
-        f"./output/obj/{pointcloudName}_approx.obj",
+        os.path.join(output_dir, "obj", f"{pointcloudName}_approx.obj"),
     )
 
     phase_2_enabled = True
@@ -162,11 +165,12 @@ def extract_pipes(
             all_segments,
             pointcloudName,
             config_path,
+            output_dir,
         )
 
         write_obj_lines(
             all_segments,
-            f"./output/obj/{pointcloudName}_snapped.obj",
+            os.path.join(output_dir, "obj", f"{pointcloudName}_pipes.obj"),
         )
         print(
             f"Phase 2: Finished in {time.time() - checkpointTime:.2f}s - {time.time() - startTime:.2f}s"

@@ -1,10 +1,10 @@
 {
   "parallel_worker": 16,
-  "slice_thickness": 0.1,
+  "slice_thickness": 0.2,
   "hough": {
     "cell_size": 0.01,
     "canny_sigma": 1.2,
-    "threshold": 5,
+    "threshold": 15,
     "min_line_length": 1.5,
     "max_line_gap": 0.5
   },

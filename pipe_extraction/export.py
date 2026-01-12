@@ -329,6 +329,7 @@ def export_sample_vectors_to_obj(
     tangential_length: float,
     normal_length: float,
     pointcloudName: str,
+    output_dir: str,
 ):
     """
     Exportiert Sample-Point-Vektoren in eine OBJ-Datei.
@@ -338,7 +339,9 @@ def export_sample_vectors_to_obj(
     - Normalenvektor (n_hat) skaliert mit normal_length
     - Resultierender Punkt (c_xy) als Punkt
     """
-    with open(f"./output/obj/{pointcloudName}_snapVectors.obj", "w") as f:
+    with open(
+        os.path.join(output_dir, "obj", f"{pointcloudName}_snapVectors.obj"), "w"
+    ) as f:
         f.write("# Sample Point Vectors Export\n")
         f.write(f"# Tangential half width: {tangential_length}\n")
         f.write(f"# Normal length: {normal_length}\n")

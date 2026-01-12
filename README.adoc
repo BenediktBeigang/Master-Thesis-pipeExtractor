@@ -12,8 +12,8 @@ flowchart LR
   classDef normal stroke-width:1px;
 
   %% ===== Inputs =====
-  I1["Predicted pointclouds\n(Label: Pipe)"]
-  I3["Predicted pointclouds\n(Label: Component)"]
+  I1["Predicted pointclouds (Label: Pipe)"]
+  I3["Predicted pointclouds (Label: Component)"]
 
   %% ===== Phase 1 (group) =====
   subgraph P1["Phase 1: Pipe instance detection"]
@@ -25,10 +25,10 @@ flowchart LR
   end
 
   %% ===== Phase 2 =====
-  P2["Phase 2:\nPipe instance finetuning"]
+  P2["Phase 2: Pipe instance finetuning"]
 
   %% ===== Phase 3 =====
-  P3["Phase 3:\nComponent detection"]
+  P3["Phase 3: Component detection"]
 
   %% ===== Output ======
   J["final component instances"]
@@ -36,10 +36,10 @@ flowchart LR
 
   %% ===== Flow + edge labels =====
   I1 --> P1
-  P1 -->|approximated\npipe instances| P2
-  P2 -->|final\npipe instances| P3
+  P1 -->|approximated pipe instances| P2
+  P2 -->|final pipe instances| P3
   I3 --> P3
-  P2 -->|final\npipe instances| J
+  P2 -->|final pipe instances| J
   P3 --> J
   J -->|.geojson| O
 

@@ -66,6 +66,7 @@ def snap_segments_to_point_cloud_data_parallel(
     segments: Segment3DArray,
     pointcloudName: str,
     config_path: str,
+    output_dir: str,
     max_workers: int = -1,
 ) -> tuple[Segment3DArray, list[Point3DArray]]:
     """
@@ -148,13 +149,14 @@ def snap_segments_to_point_cloud_data_parallel(
     print(f"Processing complete: {total_processed} segments processed")
 
     # Export of the Sample Data as a .obj for Visualization
-    # args = load_config(config_path)["snap_to_pipe"]
-    # export_sample_vectors_to_obj(
-    #     sample_data,
-    #     args["tangential_length"],
-    #     args["normal_length"],
-    #     pointcloudName,
-    # )
+    args = load_config(config_path)["snap_to_pipe"]
+    export_sample_vectors_to_obj(
+        sample_data,
+        args["tangential_length"],
+        args["normal_length"],
+        pointcloudName,
+        output_dir,
+    )
 
     snapped_chains: list[Point3DArray] = []
     for seg_sample_data in segment_samples:

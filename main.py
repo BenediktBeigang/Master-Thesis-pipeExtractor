@@ -16,6 +16,7 @@ def main(
     pc_path: str,
     gt_path: str = None,
     config_path: str = "./config.json",
+    output_dir: str = "./output",
     eval: bool = False,
 ):
     """
@@ -32,7 +33,7 @@ def main(
     eval : bool, optional
         Whether to run evaluation after extraction.
     """
-    prepare_output_directory("./output/", clean=False)
+    prepare_output_directory(output_dir)
     pointcloudName = os.path.basename(pc_path).split(".")[0]
 
     if True:
@@ -49,6 +50,7 @@ def main(
             xyz=xyz_pipes,
             config_path=config_path,
             pointcloudName=pointcloudName,
+            output_dir=output_dir,
         )
         del xyz_pipes
         gc.collect()
@@ -67,6 +69,7 @@ def main(
             config_path=config_path,
             pipes=pipes,
             pointcloudName=pointcloudName,
+            output_dir=output_dir,
             apply_poisson=True,
             poisson_radius=0.02,
             near_pipe_filter=True,
@@ -76,7 +79,9 @@ def main(
             pipes,
             snapped_chains,
             pipeComponents,
-            pointscloudName=f"./output/geojson/{pointcloudName}.geojson",
+            pointscloudName=os.path.join(
+                output_dir, "geojson", f"{pointcloudName}.geojson"
+            ),
         )
         del pipes, snapped_chains, pipeComponents
         gc.collect()
@@ -94,7 +99,7 @@ def main(
             load_geojson(gt_path)
         )
         detected_pipes, detected_components, detected_pipes_asChain = load_geojson(
-            f"./output/geojson/{pointcloudName}.geojson"
+            os.path.join(output_dir, "geojson", f"{pointcloudName}.geojson")
         )
 
         pipeEval(ground_truth_pipes, detected_pipes, pointcloudName)
@@ -111,13 +116,26 @@ if __name__ == "__main__":
         help="Path to configuration file (JSON) with parameters",
     )
     ap.add_argument(
+        "--output_dir",
+        default="./output",
+        help="Path to output directory for extracted files",
+    )
+    ap.add_argument(
         "--eval", default=False, help="Whether to run evaluation after extraction"
     )
     args = ap.parse_args()
+
+    args.output_dir = os.path.abspath(args.output_dir)
+    print(f"Output directory set to: {args.output_dir}")
+
+    if args.gt_path is None and args.eval:
+        print("No ground truth path provided, skipping evaluation.")
+        args.eval = False
 
     main(
         pc_path=args.input,
         gt_path=args.gt_path,
         config_path=args.config_path,
+        output_dir=args.output_dir,
         eval=args.eval,
     )
