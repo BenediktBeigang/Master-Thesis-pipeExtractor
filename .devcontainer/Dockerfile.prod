@@ -1,0 +1,24 @@
+FROM mambaorg/micromamba:latest
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MAMBA_ROOT_PREFIX=/opt/conda \
+    MAMBA_DEFAULT_ENV=pipe-extraction
+
+USER root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git curl && \
+    rm -rf /var/lib/apt/lists/*
+USER mambauser
+
+WORKDIR /code
+COPY --chown=mambauser:mambauser environment.yml /tmp/environment.yml
+
+RUN micromamba create -y -n "${MAMBA_DEFAULT_ENV}" -f /tmp/environment.yml && \
+    micromamba clean --all -y
+
+RUN mkdir -p /code/app
+COPY --chown=mambauser:mambauser app/ /code/app/
+
+EXPOSE 55366
+ENTRYPOINT ["micromamba", "run", "-n", "pipe-extraction", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "55366", "--reload", "--log-level", "warning"]
