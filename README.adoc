@@ -4,6 +4,10 @@ Extraction of pipes and pipe components from classified pointclouds.
 
 ifdef::env-github[]
 [source,mermaid]
+endif::[]
+ifndef::env-github[]
+[mermaid]
+endif::[]
 ----
 flowchart LR
   %% ===== Styles =====
@@ -21,17 +25,17 @@ flowchart LR
     P1a["Phase 1a: Slice hough search"]
     P1b["Phase 1b: Slice clustering & merging"]
     P1c["Phase 1c: Global clustering & merging"]
-    P1a --> P1b --> P1c
+    P1a --> P1b -->|"{Σ}"| P1c
   end
 
   %% ===== Phase 2 =====
   P2["Phase 2: Pipe instance finetuning"]
 
   %% ===== Phase 3 =====
-  P3["Phase 3: Component detection"]
+  P3["Phase 3: Pipe component detection"]
 
   %% ===== Output ======
-  J["final component instances"]
+  J["Export features"]
   O["Geodatenserver"]
 
   %% ===== Flow + edge labels =====
@@ -40,61 +44,13 @@ flowchart LR
   P2 -->|final pipe instances| P3
   I3 --> P3
   P2 -->|final pipe instances| J
-  P3 --> J
+  P3 -->|final pipe components| J
   J -->|.geojson| O
 
   %% ===== Class assignments =====
   class I1,I3,O external
   class P1a,P1b,P1c,P2,P3 normal
 ----
-endif::[]
-
-ifndef::env-github[]
-[mermaid]
-----
-flowchart LR
-  %% ===== Styles =====
-  classDef external stroke-width:1px,stroke-dasharray: 10 5;
-  classDef header fill:#fff,stroke-width:1.5px;
-  classDef normal stroke-width:1px;
-
-  %% ===== Inputs =====
-  I1["Predicted pointclouds\n(Label: Pipe)"]
-  I3["Predicted pointclouds\n(Label: Component)"]
-
-  %% ===== Phase 1 (group) =====
-  subgraph P1["Phase 1: Pipe instance detection"]
-    direction TB
-    P1a["Phase 1a: Slice hough search"]
-    P1b["Phase 1b: Slice clustering & merging"]
-    P1c["Phase 1c: Global clustering & merging"]
-    P1a --> P1b -->|"{Σ}"| P1c
-  end
-
-  %% ===== Phase 2 =====
-  P2["Phase 2:\nPipe instance finetuning"]
-
-  %% ===== Phase 3 =====
-  P3["Phase 3:\nPipe component detection"]
-
-  %% ===== Output ======
-  J["final features"]
-  O["Geodatenserver"]
-
-  %% ===== Flow + edge labels =====
-  I1 --> P1
-  P1 -->|approximated\npipe instances| P2
-  P2 -->|final\npipe instances| P3
-  I3 --> P3
-  P2 -->|final\npipe instances| J
-  P3 -->|final\npipe components| J
-  J -->|.geojson| O
-
-  %% ===== Class assignments =====
-  class I1,I3,O external
-  class P1a,P1b,P1c,P2,P3 normal
-----
-endif::[]
 
 .Where to find what
 [cols="1,2,2",options="header"]
