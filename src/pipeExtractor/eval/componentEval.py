@@ -1,8 +1,8 @@
 import json
 import numpy as np
-from eval.componentMetrics import component_detection_metric
-from eval.plots.componentClassPlot import plot_componentClasses
-from eval.plots.distancePlot import plot_boxplots_lineDistances
+from pipeExtractor.eval.componentMetrics import component_detection_metric
+from pipeExtractor.eval.plots.componentClassPlot import plot_componentClasses
+from pipeExtractor.eval.plots.distancePlot import plot_boxplots_lineDistances
 
 
 def componentEval(ground_truth, detected_components, pointcloudName):

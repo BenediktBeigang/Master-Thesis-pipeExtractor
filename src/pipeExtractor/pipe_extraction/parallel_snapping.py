@@ -3,7 +3,11 @@ from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import shared_memory, get_context
 import numpy as np
 from scipy.spatial import KDTree
-from custom_types import Point3DArray, Segment3DArray, Segment3DArray_Empty
+from pipeExtractor.custom_types import (
+    Point3DArray,
+    Segment3DArray,
+    Segment3DArray_Empty,
+)
 from pipeExtractor.util import load_config
 
 # Globals, which are filled in the worker
@@ -30,7 +34,7 @@ def worker_process_segment(task, config_path):
     task: (segment_idx, segment)
     args_dict: Parameter für das Segment-Processing
     """
-    from pipe_extraction.snapToPipe import process_single_segment
+    from pipeExtractor.pipe_extraction.snapToPipe import process_single_segment
 
     segment_idx, segment = task
 
@@ -88,8 +92,8 @@ def snap_segments_to_point_cloud_data_parallel(
     -------
     Segment3DArray, shape (N, 2, 3)
     """
-    from custom_types import Segment3DArray_Empty
-    from pipe_extraction.export import export_sample_vectors_to_obj
+    from pipeExtractor.custom_types import Segment3DArray_Empty
+    from pipeExtractor.pipe_extraction.export import export_sample_vectors_to_obj
 
     if not isinstance(xyz, np.ndarray) or xyz.shape[1] < 2:
         raise ValueError("xyz has to be [N,3].")

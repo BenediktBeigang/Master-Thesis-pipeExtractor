@@ -1,17 +1,20 @@
 import math
 from typing import List
-from custom_types import Segment3D
-from eval.metrics.pipeCover import calc_gt_cover, calculate_coverage_absolute
-from eval.metrics.pipeTruePositive import (
+from pipeExtractor.custom_types import Segment3D
+from pipeExtractor.eval.metrics.pipeCover import (
+    calc_gt_cover,
+    calculate_coverage_absolute,
+)
+from pipeExtractor.eval.metrics.pipeTruePositive import (
     is_segment_in_tolerance,
 )
-from eval.util import (
+from pipeExtractor.eval.util import (
     _norm,
     point_to_infinite_line_distance_z,
     point_to_segment_distance_xy,
     _sub,
 )
-from eval.export import write_segments_to_obj
+from pipeExtractor.eval.export import write_segments_to_obj
 
 
 def _best_pair_maxdist_xy(gt: Segment3D, det: Segment3D) -> float:

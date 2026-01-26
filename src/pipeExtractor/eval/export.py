@@ -1,4 +1,4 @@
-from custom_types import Point3DArray
+from pipeExtractor.custom_types import Point3DArray
 
 
 def write_segments_to_obj(

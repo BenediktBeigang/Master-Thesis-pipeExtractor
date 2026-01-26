@@ -33,11 +33,11 @@ def worker_process_slice(task, config_path):
     task: (slice_idx, z_center, zmin, zmax)
     args_dict: nur primitive Werte (float/bool/int), damit Pickling klein bleibt
     """
-    from pipe_extraction.calcSlice import (
+    from pipeExtractor.pipe_extraction.calcSlice import (
         find_lines_in_slice,
     )  # Import im Worker (sauber bei spawn)
-    from pipe_extraction.clustering_hough import cluster_segments
-    from pipe_extraction.merge_segments import merge_segments_in_clusters
+    from pipeExtractor.pipe_extraction.clustering_hough import cluster_segments
+    from pipeExtractor.pipe_extraction.merge_segments import merge_segments_in_clusters
 
     slice_idx, z_center, zmin, zmax = task
 

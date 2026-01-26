@@ -1,5 +1,5 @@
 import numpy as np
-from custom_types import Segment3DArray
+from pipeExtractor.custom_types import Segment3DArray
 
 
 def _points_to_segment_min_distances_chunked(

@@ -7,20 +7,22 @@ import os
 import time
 import sys
 import numpy as np
-from pipe_extraction.calcSlice import get_z_slices
-from pipe_extraction.clustering_hough import cluster_segments
-from custom_types import Point3DArray, Segment3DArray
-from pipe_extraction.export import (
+from pipeExtractor.pipe_extraction.calcSlice import get_z_slices
+from pipeExtractor.pipe_extraction.clustering_hough import cluster_segments
+from pipeExtractor.custom_types import Point3DArray, Segment3DArray
+from pipeExtractor.pipe_extraction.export import (
     write_clusters_as_obj,
     write_obj_lines,
 )
-from pipe_extraction.merge_segments import merge_segments_in_clusters
-from pipe_extraction.parallel_slices import (
+from pipeExtractor.pipe_extraction.merge_segments import merge_segments_in_clusters
+from pipeExtractor.pipe_extraction.parallel_slices import (
     share_xyz_array,
     _init_shm,
     worker_process_slice,
 )
-from pipe_extraction.parallel_snapping import snap_segments_to_point_cloud_data_parallel
+from pipeExtractor.pipe_extraction.parallel_snapping import (
+    snap_segments_to_point_cloud_data_parallel,
+)
 from pipeExtractor.util import load_config
 
 

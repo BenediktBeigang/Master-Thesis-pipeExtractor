@@ -2,7 +2,7 @@ import json
 from typing import Iterable, List
 
 import numpy as np
-from custom_types import (
+from pipeExtractor.custom_types import (
     ListOfPoint3DArrays,
     PipeComponent,
     PipeComponentArray,

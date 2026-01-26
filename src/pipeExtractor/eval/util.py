@@ -1,7 +1,7 @@
 import math
 import numpy as np
 import os
-from custom_types import Point3D
+from pipeExtractor.custom_types import Point3D
 
 
 def map_classes(y_true, mapping):

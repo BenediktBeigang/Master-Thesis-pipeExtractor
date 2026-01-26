@@ -1,11 +1,15 @@
 import math
 from typing import List
 import numpy as np
-from pipe_extraction.mapping import pixel_to_world
+from pipeExtractor.pipe_extraction.mapping import pixel_to_world
 from skimage.feature import canny
 from skimage.filters import gaussian
 from skimage.transform import probabilistic_hough_line
-from custom_types import Segment2DArray, Segment3DArray, Segment3DArray_Empty
+from pipeExtractor.custom_types import (
+    Segment2DArray,
+    Segment3DArray,
+    Segment3DArray_Empty,
+)
 
 
 def get_z_slices(xyz: np.ndarray, thickness: float) -> List[tuple[float, float, float]]:

@@ -1,5 +1,5 @@
-from custom_types import Point3D, Segment3D
-from eval.util import _dot, _norm, _sub
+from pipeExtractor.custom_types import Point3D, Segment3D
+from pipeExtractor.eval.util import _dot, _norm, _sub
 
 
 def _project_point_on_segment_as_t(p: Point3D, a: Point3D, b: Point3D) -> float:

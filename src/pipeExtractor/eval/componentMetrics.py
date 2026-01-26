@@ -1,6 +1,6 @@
 from typing import List
-from custom_types import PipeComponentArray
-from eval.metrics.pipeTruePositive import is_component_in_tolerance
+from pipeExtractor.custom_types import PipeComponentArray
+from pipeExtractor.eval.metrics.pipeTruePositive import is_component_in_tolerance
 
 
 def component_detection_metric(

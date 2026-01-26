@@ -1,5 +1,5 @@
 import numpy as np
-from custom_types import Segment3DArray
+from pipeExtractor.custom_types import Segment3DArray
 
 
 def mean_z_height(segment):

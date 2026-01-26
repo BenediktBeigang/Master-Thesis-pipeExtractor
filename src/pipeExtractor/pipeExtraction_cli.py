@@ -1,6 +1,6 @@
 import argparse
 import os
-from pipeline import extract_features_for_pointcloud
+from pipeExtractor.pipeline import extract_features_for_pointcloud
 
 
 def main():

@@ -102,12 +102,13 @@ link:eval/componentEval.py[`componentEval()`]
 ----
 conda env create -f environment.yml
 conda activate pipe-extraction
+pip install -e .
 
 # Minimal usage:
-python main.py --input <filename>.las
+python pipeExtraction_cli.py --input <filename>.las
 
 # With all options:
-python main.py --input <filename>.las \\
+python pipeExtraction_cli.py --input <filename>.las \\
 --config_path <config>.json  \\ # custom configuration
 --gt_path <ground_truth>.geojson \\ # ground truth for evaluation
 --eval \\ # enable evaluation (gt_path required)

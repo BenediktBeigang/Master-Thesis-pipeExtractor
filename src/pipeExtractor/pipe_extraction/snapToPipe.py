@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import numpy as np
 from scipy.spatial import KDTree
-from custom_types import (
+from pipeExtractor.custom_types import (
     Point2D,
     Point3D,
     Segment3D,
@@ -13,7 +13,7 @@ from custom_types import (
     Segment3DArray_Empty,
     Segment3DArray_One,
 )
-from pipe_extraction.samplePointMerge import extract_segments
+from pipeExtractor.pipe_extraction.samplePointMerge import extract_segments
 from pipeExtractor.util import poisson_disk_on_points_xy
 
 

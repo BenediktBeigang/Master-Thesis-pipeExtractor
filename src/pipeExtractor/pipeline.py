@@ -1,13 +1,15 @@
 import gc
 import os
-from custom_types import PipeComponentArray
-from .util import load_las_and_split, prepare_output_directory
-from export_geojson import export_geojson
-from eval.pipeEval import pipeEval
-from eval.componentEval import componentEval
-from eval.load_geojson import load_geojson
-from .pipe_extraction.pipe_extraction_hough_parallel import extract_pipes
-from pipeComponent_extraction.pipeComponentExtraction import extract_pipeComponents
+from pipeExtractor.custom_types import PipeComponentArray
+from pipeExtractor.util import load_las_and_split, prepare_output_directory
+from pipeExtractor.export_geojson import export_geojson
+from pipeExtractor.eval.pipeEval import pipeEval
+from pipeExtractor.eval.componentEval import componentEval
+from pipeExtractor.eval.load_geojson import load_geojson
+from pipeExtractor.pipe_extraction.pipe_extraction_hough_parallel import extract_pipes
+from pipeExtractor.pipeComponent_extraction.pipeComponentExtraction import (
+    extract_pipeComponents,
+)
 
 
 def extract_features_for_pointcloud(

@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.cluster import DBSCAN
 import numpy as np
-from custom_types import Segment3DArray
+from pipeExtractor.custom_types import Segment3DArray
 
 
 def cluster_segments_strict(

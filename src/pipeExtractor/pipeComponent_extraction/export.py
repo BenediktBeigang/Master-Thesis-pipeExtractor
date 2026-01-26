@@ -1,4 +1,4 @@
-from custom_types import PipeComponentArray
+from pipeExtractor.custom_types import PipeComponentArray
 
 
 def write_obj_pipeComponents(components: PipeComponentArray, output_path):

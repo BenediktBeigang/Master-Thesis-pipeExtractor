@@ -3,9 +3,11 @@ from typing import Optional, Union
 import numpy as np
 from sklearn.cluster import HDBSCAN  # type: ignore
 import time
-from custom_types import PipeComponentArray, Point3D, Segment3DArray
-from pipeComponent_extraction.export import write_obj_pipeComponents
-from pipeComponent_extraction.filter import filter_points_by_pipe_distance_vectorized
+from pipeExtractor.custom_types import PipeComponentArray, Point3D, Segment3DArray
+from pipeExtractor.pipeComponent_extraction.export import write_obj_pipeComponents
+from pipeExtractor.pipeComponent_extraction.filter import (
+    filter_points_by_pipe_distance_vectorized,
+)
 from pipeExtractor.util import load_config, poisson_disk_on_points_xy
 
 

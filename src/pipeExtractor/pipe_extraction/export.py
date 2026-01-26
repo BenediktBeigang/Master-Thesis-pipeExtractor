@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from skimage.transform import hough_line_peaks
 import laspy
 import json
-from custom_types import Segment3DArray
+from pipeExtractor.custom_types import Segment3DArray
 
 
 def save_slice_las(

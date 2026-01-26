@@ -1,6 +1,6 @@
 import numpy as np
-from custom_types import Point3D, Segment3D
-from eval.util import _dot, _norm, point_to_segment_distance_xy, _sub
+from pipeExtractor.custom_types import Point3D, Segment3D
+from pipeExtractor.eval.util import _dot, _norm, point_to_segment_distance_xy, _sub
 
 
 def calc_overlap_on_segment(seg_base, seg_proj):

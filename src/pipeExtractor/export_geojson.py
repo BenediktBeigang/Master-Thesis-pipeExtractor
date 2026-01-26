@@ -1,7 +1,7 @@
 import json
 import numpy as np
 from typing import Optional
-from custom_types import PipeComponentArray, Point3DArray, Segment3DArray
+from pipeExtractor.custom_types import PipeComponentArray, Point3DArray, Segment3DArray
 
 
 def _bbox_from_min_max(bmin: np.ndarray, bmax: np.ndarray) -> list[float]:

@@ -1,8 +1,8 @@
 import json
 import numpy as np
-from eval.pipeMetrics import pipe_detection_metric
-from eval.plots.distancePlot import plot_boxplots_lineDistances
-from eval.plots.pipeClassPlot import plot_segmentClasses
+from pipeExtractor.eval.pipeMetrics import pipe_detection_metric
+from pipeExtractor.eval.plots.distancePlot import plot_boxplots_lineDistances
+from pipeExtractor.eval.plots.pipeClassPlot import plot_segmentClasses
 
 
 def pipeEval(ground_truth, detected_pipes, pointcloudName, output=None):
@@ -10,7 +10,7 @@ def pipeEval(ground_truth, detected_pipes, pointcloudName, output=None):
     #     ground_truth_segments,
     #     "./ontras_3_ground_truth.obj",
     # )
-    
+
     output = pointcloudName if output is None else output
 
     (

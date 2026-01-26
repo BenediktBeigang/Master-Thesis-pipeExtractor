@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from custom_types import (
+from pipeExtractor.custom_types import (
     ListOfPoint3DArrays,
     Point2D,
     Point2DArray,
