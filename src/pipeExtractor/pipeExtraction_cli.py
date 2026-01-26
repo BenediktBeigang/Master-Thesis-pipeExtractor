@@ -3,7 +3,7 @@ import os
 from pipeline import extract_features_for_pointcloud
 
 
-if __name__ == "__main__":
+def main():
     ap = argparse.ArgumentParser(description="Pipe extraction from LAS to GeoJSON/OBJ")
     ap.add_argument("--input", required=True, help="Path to LAS/LAZ file")
     ap.add_argument(

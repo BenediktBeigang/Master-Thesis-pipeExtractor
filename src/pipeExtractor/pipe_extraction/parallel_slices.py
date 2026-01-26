@@ -2,7 +2,7 @@ import atexit
 from multiprocessing import shared_memory
 import os
 import numpy as np
-from util import load_config
+from pipeExtractor.util import load_config
 
 # Globals, die im Worker gefüllt werden
 _SHM = None

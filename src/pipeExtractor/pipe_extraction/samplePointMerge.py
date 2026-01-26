@@ -12,7 +12,7 @@ from custom_types import (
     Segment3DArray_Empty,
 )
 from skimage.measure import LineModelND, ransac
-from util import project_point_to_line
+from pipeExtractor.util import project_point_to_line
 
 
 def _buckets_by_delta_z(

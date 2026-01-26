@@ -14,7 +14,7 @@ from custom_types import (
     Segment3DArray_One,
 )
 from pipe_extraction.samplePointMerge import extract_segments
-from util import poisson_disk_on_points_xy
+from pipeExtractor.util import poisson_disk_on_points_xy
 
 
 def _unit(v: np.ndarray) -> np.ndarray:

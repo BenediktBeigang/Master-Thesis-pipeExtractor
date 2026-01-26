@@ -4,7 +4,7 @@ from multiprocessing import shared_memory, get_context
 import numpy as np
 from scipy.spatial import KDTree
 from custom_types import Point3DArray, Segment3DArray, Segment3DArray_Empty
-from util import load_config
+from pipeExtractor.util import load_config
 
 # Globals, which are filled in the worker
 _SHM = None

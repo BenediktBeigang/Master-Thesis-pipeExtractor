@@ -6,7 +6,7 @@ import time
 from custom_types import PipeComponentArray, Point3D, Segment3DArray
 from pipeComponent_extraction.export import write_obj_pipeComponents
 from pipeComponent_extraction.filter import filter_points_by_pipe_distance_vectorized
-from util import load_config, poisson_disk_on_points_xy
+from pipeExtractor.util import load_config, poisson_disk_on_points_xy
 
 
 def ensure_bool_mask(

@@ -21,7 +21,7 @@ from pipe_extraction.parallel_slices import (
     worker_process_slice,
 )
 from pipe_extraction.parallel_snapping import snap_segments_to_point_cloud_data_parallel
-from util import load_config
+from pipeExtractor.util import load_config
 
 
 def extract_pipes(
