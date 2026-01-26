@@ -27,3 +27,10 @@ Repository = "https://github.com/BenediktBeigang/pipe-vector-extractor"
 
 [project.optional-dependencies]
 dev = ["black"]
+
+[tool.setuptools]
+packages = [
+    "pipe_extraction",
+    "pipeComponent_extraction", 
+    "eval"
+]
