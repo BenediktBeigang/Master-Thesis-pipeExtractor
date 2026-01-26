@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "pipe-vector-extractor"
 version = "0.7.1"
 description = "Extraction of pipes and pipe components from classified pointclouds"
-readme = "README.adoc"
+readme = { file = "README.adoc", content-type = "text/plain" }
 authors = [
     {name = "Benedikt Beigang"}
 ]
