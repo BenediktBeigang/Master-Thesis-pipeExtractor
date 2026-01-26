@@ -29,6 +29,7 @@ Repository = "https://github.com/BenediktBeigang/pipe-vector-extractor"
 dev = ["black"]
 
 [tool.setuptools]
+py-modules = ["pipeline", "util", "custom_types", "export_geojson", "pipeExtraction_cli"]
 packages = [
     "pipe_extraction",
     "pipeComponent_extraction", 
