@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pipe-vector-extractor"
+version = "0.7.1"
+description = "Extraction of pipes and pipe components from classified pointclouds"
+readme = "README.adoc"
+authors = [
+    {name = "Benedikt Beigang"}
+]
+requires-python = ">=3.13"
+dependencies = [
+  "numpy>=2.3.3",
+  "pandas>=2.3.3",
+  "laspy>=2.6.1",
+  "scikit-learn>=1.7.2",
+  "scikit-image>=0.25.2",
+  "matplotlib>=3.10.6",
+  "scipy>=1.16.2"
+]
+
+[project.urls]
+Homepage = "https://github.com/BenediktBeigang/pipe-vector-extractor"
+Repository = "https://github.com/BenediktBeigang/pipe-vector-extractor"
+
+[project.optional-dependencies]
+dev = ["black"]

@@ -1,0 +1,5 @@
+include config.json
+include README.adoc
+recursive-include pipe_extraction *.py
+recursive-include pipeComponent_extraction *.py
+recursive-include eval *.py
