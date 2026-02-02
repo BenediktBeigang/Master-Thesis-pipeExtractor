@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,8 +10,9 @@ readme = { file = "README.adoc", content-type = "text/plain" }
 authors = [
     {name = "Benedikt Beigang"}
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+  "pdal>=2.9.2",
   "numpy>=2.3.3",
   "pandas>=2.3.3",
   "laspy>=2.6.1",
@@ -22,16 +23,20 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/BenediktBeigang/pipe-vector-extractor"
-Repository = "https://github.com/BenediktBeigang/pipe-vector-extractor"
+Homepage = "https://github.com/BenediktBeigang/Master-Thesis-pipeExtractor"
+Repository = "https://github.com/BenediktBeigang/Master-Thesis-pipeExtractor"
 
 [project.optional-dependencies]
 dev = ["black"]
 
+[project.scripts]
+pipe-extractor = "pipeExtractor.pipeExtraction_cli:main"
+
 [tool.setuptools]
-py-modules = ["pipeline", "util", "custom_types", "export_geojson", "pipeExtraction_cli"]
-packages = [
-    "pipe_extraction",
-    "pipeComponent_extraction", 
-    "eval"
-]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pipeExtractor = ["config.json"]

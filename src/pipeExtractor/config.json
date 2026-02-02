@@ -1,0 +1,49 @@
+{
+  "parallel_worker": 16,
+  "point_sample_radius": 0.02,
+  "slice_thickness": 0.2,
+  "hough": {
+    "cell_size": 0.01,
+    "canny_sigma": 1.2,
+    "threshold": 15,
+    "min_line_length": 1.5,
+    "max_line_gap": 0.5
+  },
+  "slice_cluster_and_merge": {
+    "epsilon": 0.45,
+    "min_samples": 3,
+    "rho_scale": 1.0,
+    "preserve_noise": false,
+    "min_line_length": 1.5,
+    "max_line_gap": 2.0
+  },
+  "global_cluster_and_merge": {
+    "epsilon": 0.7,
+    "min_samples": 1,
+    "rho_scale": 1.0,
+    "preserve_noise": true,
+    "min_line_length": 1.0,
+    "max_line_gap": 2.0
+  },
+  "snap_to_pipe": {
+    "normal_length": 0.8,
+    "tangential_length": 0.05,
+    "min_points_for_centroid": 4,
+    "samples_per_meter": 2.0,
+    "min_sample_points": 3,
+    "poisson_radius": 0.02,
+    "quantization_precision": 0.01,
+    "max_angle_change_deg": 15.0,
+    "ransac_residual_threshold": 0.05,
+    "min_points_per_bucket": 3,
+    "merge_jump_threshold": 3.0
+  },
+  "pipeComponent_clustering": {
+    "filter_near_pipes": true,
+    "min_points": 20,
+    "metric": "euclidean",
+    "cluster_selection_method": "eom",
+    "leaf_size": 40,
+    "pipe_distance_threshold": 0.5
+  }
+}
