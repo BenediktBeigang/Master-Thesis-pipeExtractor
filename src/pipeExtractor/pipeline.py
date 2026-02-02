@@ -1,5 +1,6 @@
 import gc
 import os
+from importlib.resources import files
 from pipeExtractor.custom_types import PipeComponentArray
 from pipeExtractor.util import load_las_and_split, prepare_output_directory
 from pipeExtractor.export_geojson import export_geojson
