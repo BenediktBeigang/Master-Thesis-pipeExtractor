@@ -1,8 +1,11 @@
 import os
 import shutil
 import numpy as np
-import laspy
+import pdal
 import json
+
+PIPE_CLASS = 1
+PIPE_COMPONENT_CLASS = 2
 
 
 def get_classification_array(las):
@@ -25,41 +28,59 @@ def get_classification_array(las):
     return None
 
 
-def load_las_and_split(
-    path: str,
-    ignoreZ: bool = False,
-) -> tuple[np.ndarray, np.ndarray] | None:
+def load_las(pc_path: str, ignoreZ: bool = False, sample_radius: float = None):
     """
-    Lädt die LAS-Datei einmal und teilt sie in Rohre (Klasse 1) und Komponenten (Klasse 2).
-    Gibt zwei getrennte Arrays zurück, die sicher im Speicher kopiert sind.
+    Load LAS file.
+    Splits into pipes and pipe components.
+    Optionally apply PDAL sampling.
+
+    Parameters
+    ----------
+    pc_path : str
+        Path to the input LAS file
+    ignoreZ : bool
+        Whether to ignore Z coordinates
+    sample_radius : float, optional
+        Radius for Poisson sampling in meters. If None, no sampling is applied.
+
+    Returns
+    -------
+    xyz_pipes : np.ndarray
+        Points classified as pipes (Class 1)
+    xyz_pipeComponents : np.ndarray
+        Points classified as pipe components (Class 2)
     """
-    print(f"Load LAS-File (Full): {path}")
-    las = laspy.read(path)
+    # PDAL setup
+    pdal_pipeline = {"pipeline": [pc_path]}
+    if sample_radius is not None:
+        print(f"PDAL will sample with point to point distance: {sample_radius} m")
+        pdal_pipeline["pipeline"].append(
+            {"type": "filters.sample", "radius": sample_radius}
+        )
+    pipeline = pdal.Pipeline(json.dumps(pdal_pipeline))
 
-    classification_array = get_classification_array(las)
-    if classification_array is None:
-        raise RuntimeError("LAS field 'Classification' not found.")
+    # PDAL execution
+    print(f"Read {pc_path} with PDAL...")
+    count = pipeline.execute()
+    arrays = pipeline.arrays
+    points = arrays[0]
 
-    x_all = np.asarray(las.x, dtype=np.float64)
-    y_all = np.asarray(las.y, dtype=np.float64)
+    # Split by classification
+    print("Splitting points by classification...")
+    xyz = np.column_stack((points["X"], points["Y"], points["Z"]))
+    classification = points["Classification"]
+    xyz_pipes = xyz[classification == PIPE_CLASS]
+    xyz_pipeComponents = xyz[classification == PIPE_COMPONENT_CLASS]
 
-    points_all = None
     if ignoreZ:
-        points_all = np.column_stack((x_all, y_all))
-    else:
-        z_all = np.asarray(las.z, dtype=np.float64)
-        points_all = np.column_stack((x_all, y_all, z_all))
+        xyz_pipes = xyz_pipes[:, :2]
+        xyz_pipeComponents = xyz_pipeComponents[:, :2]
 
-    mask_pipes = classification_array == 1  # Class 1: Pipes
-    mask_components = classification_array == 2  # Class 2: Pipe Components
+    print(f"Loaded {count} points from {pc_path}")
+    print(f"  - Pipes (Class 1): {len(xyz_pipes)} points")
+    print(f"  - Components (Class 2): {len(xyz_pipeComponents)} points")
 
-    xyz_pipes = points_all[mask_pipes]
-    xyz_components = points_all[mask_components]
-
-    print(f"  -> Extracted {len(xyz_pipes)} points for pipes (Class 1)")
-    print(f"  -> Extracted {len(xyz_components)} points for components (Class 2)")
-
-    return xyz_pipes, xyz_components
+    return xyz_pipes, xyz_pipeComponents
 
 
 def prepare_output_directory(output_dir: str, clean: bool = True):

@@ -2,7 +2,7 @@ import gc
 import os
 from importlib.resources import files
 from pipeExtractor.custom_types import PipeComponentArray
-from pipeExtractor.util import load_las_and_split, prepare_output_directory
+from pipeExtractor.util import load_config, load_las, prepare_output_directory
 from pipeExtractor.export_geojson import export_geojson
 from pipeExtractor.eval.pipeEval import pipeEval
 from pipeExtractor.eval.componentEval import componentEval
@@ -36,6 +36,8 @@ def extract_features_for_pointcloud(
     """
     if config_path is None:
         config_path = str(files("pipeExtractor").joinpath("config.json"))
+    config = load_config(config_path)
+
     prepare_output_directory(output_dir)
     pointcloudName = os.path.basename(pc_path).split(".")[0]
 
@@ -43,7 +45,11 @@ def extract_features_for_pointcloud(
     print("### Loading Pointcloud ###")
     print("##########################")
     try:
-        xyz_pipes, xyz_pipeComponents = load_las_and_split(pc_path, ignoreZ=False)
+        xyz_pipes, xyz_pipeComponents = load_las(
+            pc_path,
+            ignoreZ=False,
+            sample_radius=config.get("point_sample_radius", None),
+        )
         if len(xyz_pipes) == 0:
             raise RuntimeError("No pipe points (Class 1) found in the LAS file.")
     except Exception as e:

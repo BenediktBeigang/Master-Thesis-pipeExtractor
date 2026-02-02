@@ -10,8 +10,9 @@ readme = { file = "README.adoc", content-type = "text/plain" }
 authors = [
     {name = "Benedikt Beigang"}
 ]
-requires-python = ">=3.13"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+  "pdal>=3.5.3",
   "numpy>=2.3.3",
   "pandas>=2.3.3",
   "laspy>=2.6.1",

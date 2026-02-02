@@ -1,5 +1,6 @@
 {
   "parallel_worker": 16,
+  "point_sample_radius": 0.02,
   "slice_thickness": 0.2,
   "hough": {
     "cell_size": 0.01,
