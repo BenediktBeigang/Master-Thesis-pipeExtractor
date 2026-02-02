@@ -15,7 +15,7 @@ from pipeExtractor.pipeComponent_extraction.pipeComponentExtraction import (
 def extract_features_for_pointcloud(
     pc_path: str,
     gt_path: str = None,
-    config_path: str = "./config.json",
+    config_path: str = None,
     output_dir: str = "./output",
     eval: bool = False,
 ):
@@ -33,6 +33,8 @@ def extract_features_for_pointcloud(
     eval : bool, optional
         Whether to run evaluation after extraction.
     """
+    if config_path is None:
+        config_path = str(files("pipeExtractor").joinpath("config.json"))
     prepare_output_directory(output_dir)
     pointcloudName = os.path.basename(pc_path).split(".")[0]
 

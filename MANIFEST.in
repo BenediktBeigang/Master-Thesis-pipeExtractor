@@ -1,3 +1,0 @@
-include config.json
-include README.adoc
-include environment.yml
