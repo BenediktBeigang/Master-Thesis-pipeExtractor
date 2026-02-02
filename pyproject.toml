@@ -12,7 +12,7 @@ authors = [
 ]
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "pdal>=3.5.3",
+  "pdal>=2.9.2",
   "numpy>=2.3.3",
   "pandas>=2.3.3",
   "laspy>=2.6.1",

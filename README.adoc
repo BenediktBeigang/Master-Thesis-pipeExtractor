@@ -98,6 +98,9 @@ link:eval/componentEval.py[`componentEval()`]
 
 == Installation and usage
 
+The usage of this pipeline requires a working conda/mamba installation.
+The `pyproject.toml` lists all required dependencies, but it's recommended to create the environment via the provided `environment.yml`.
+
 [source,bash]
 ----
 conda env create -f environment.yml
